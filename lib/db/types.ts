@@ -1,6 +1,11 @@
 // Persisted records (PRD §5). Times are epoch milliseconds, so records survive
 // JSON export and structured clone unchanged.
-import type { DateOrder, SourceKind, SourceStats } from "@/lib/extract/types";
+import type {
+  DateOrder,
+  SourceKind,
+  SourceStats,
+  TrackingParam,
+} from "@/lib/extract/types";
 
 // No status field: an import is one transaction, so a stored source is
 // complete (§8.2).
@@ -81,13 +86,6 @@ export interface Enrichment {
   ogType?: string;
   publishedAt?: number;
   provider: "oembed" | "og" | "twitter" | "html" | "derived";
-}
-
-export interface TrackingParam {
-  param: string; // exact name, or a prefix wildcard: 'utm_*'
-  hosts?: string[]; // only on these registrable domains
-  exceptHosts?: string[]; // everywhere except these
-  value?: string; // a regex the value must match ('s' with two digits)
 }
 
 export interface Settings {
