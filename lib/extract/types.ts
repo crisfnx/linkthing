@@ -29,11 +29,31 @@ export interface SourceStats {
 export interface Message {
   index: number;
   key?: string; // chat adapters only (§3)
-  lineStart: number;
+  lineStart: number; // 1-based line of the message's first line
   text: string;
   timestamp?: number;
   sender?: string;
   isSystem?: boolean;
+}
+
+// Text that has been through normalizeText (lib/extract/text.ts).
+export interface AdapterInput {
+  text: string;
+  fileName?: string;
+}
+
+export interface AdapterOptions {
+  dateOrder?: DateOrder;
+}
+
+// Turns one source format into messages (PRD §3). Pure: no DOM, no React.
+export interface Adapter {
+  kind: SourceKind;
+  // Stored on the Source; a bump offers re-extraction.
+  version: number;
+  // How sure the adapter is that it reads this input, from 0 to 1.
+  detect(input: AdapterInput): number;
+  parse(input: AdapterInput, options?: AdapterOptions): Message[];
 }
 
 export type LinkKind =

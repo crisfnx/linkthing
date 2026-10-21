@@ -41,6 +41,17 @@ describe("extractUrls positions", () => {
     );
     expect(spans).toEqual(["https://example.com/a", "www.example.com/b"]);
   });
+
+  test("cover the escaped text, so highlighting matches what's on screen", () => {
+    const slash = String.fromCharCode(92) + "/";
+    const escaped = `https:${slash}${slash}example.com${slash}a`;
+    const text = `{"url": "${escaped}"}`;
+    const [found] = extractUrls(text);
+    expect(found?.url).toBe("https://example.com/a");
+    expect(
+      text.slice(found?.index, (found?.index ?? 0) + (found?.length ?? 0)),
+    ).toBe(escaped);
+  });
 });
 
 describe("countNonWebLinks", () => {

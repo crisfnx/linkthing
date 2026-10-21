@@ -103,3 +103,18 @@ https://example.com/{{slug}} ⇒ ∅
 https://docs.google.com/presentation/d/abc123/edit#slide=id.p (needs access) ⇒ https://docs.google.com/presentation/d/abc123/edit#slide=id.p
 https://app.example/#/inbox ⇒ https://app.example/#/inbox
 https://shop.example.com/search?q=oak,shelf&colour=light%20brown&utm_source=newsletter ⇒ https://shop.example.com/search?q=oak,shelf&colour=light%20brown&utm_source=newsletter
+
+## Escaped inside JSON or HTML: found, and stored decoded (§4.1)
+{"text": "look https:\/\/example.com\/a?b=1\u0026c=2"} ⇒ https://example.com/a?b=1&c=2
+"url":"https:\/\/x.com\/i\/status\/123" ⇒ https://x.com/i/status/123
+{"link": "https:\u002F\u002Fexample.com\u002Fpath"} ⇒ https://example.com/path
+{"t":"https:\/\/example.com\/caf\u00e9"} ⇒ https://example.com/café
+"www.example.com\/guide" ⇒ https://www.example.com/guide
+"see https:\/\/example.com\/a\nnext line" ⇒ https://example.com/a
+"https:\/\/example.com\/a\\b" ⇒ https://example.com/a
+"https:\/\/example.com\/q?x=\"quoted\"" ⇒ https://example.com/q?x=
+<a href="https://example.com/?a=1&amp;b=2">x</a> ⇒ https://example.com/?a=1&b=2
+<a href="https://example.com/p?q=a&#38;r=b"> ⇒ https://example.com/p?q=a&r=b
+<a href='https://example.com/x&#x26;y'> ⇒ https://example.com/x&y
+https://example.com/?a=1&amp; ⇒ https://example.com/?a=1&
+Tom &amp; Jerry https://example.com/tj ⇒ https://example.com/tj

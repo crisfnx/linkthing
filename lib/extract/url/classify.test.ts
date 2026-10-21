@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { classify } from "./classify";
-import { domainOf } from "./domain";
+import { aliasesOf, domainOf } from "./domain";
 import { isShortened } from "./shorteners";
 
 const parts = (url: string) => {
@@ -21,6 +21,17 @@ describe("domainOf", () => {
     ["192.168.1.10", "192.168.1.10"],
   ])("%s → %s", (hostname, domain) => {
     expect(domainOf(hostname)).toBe(domain);
+  });
+});
+
+describe("aliasesOf", () => {
+  test.each([
+    ["twitter.com", ["twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com"]],
+    ["youtube.com", ["youtube.com", "youtu.be"]],
+    ["reddit.com", ["reddit.com", "redd.it"]],
+    ["github.com", ["github.com"]],
+  ])("%s", (domain, names) => {
+    expect(aliasesOf(domain)).toEqual(names);
   });
 });
 

@@ -21,3 +21,13 @@ export function domainOf(hostname: string): string {
   const domain = registrableDomain(hostname);
   return ALIASES[domain] ?? domain;
 }
+
+// Every name a grouped domain goes by, so a search for "x.com" or "youtu.be"
+// finds links grouped as twitter.com or youtube.com, and the other way round
+// (PRD §6.3).
+export function aliasesOf(domain: string): string[] {
+  return [
+    domain,
+    ...Object.keys(ALIASES).filter((alias) => ALIASES[alias] === domain),
+  ];
+}
