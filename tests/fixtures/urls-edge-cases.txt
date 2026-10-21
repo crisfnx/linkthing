@@ -1,0 +1,105 @@
+# URL edge cases: the contract for finding and repairing URLs (PRD §4.1–4.3, §9).
+#
+# One case per line:   <input> ⇒ <expected>
+# <expected> is every URL found, as stored in Link.url (after repair), separated
+# by spaces, or ∅ when nothing should be stored. \u{XXXX} in an input stands
+# for that character, so invisible ones stay readable. Lines starting with #
+# are comments.
+
+## Plain matches
+https://example.com ⇒ https://example.com
+http://example.com/path ⇒ http://example.com/path
+HTTPS://Example.COM/Path ⇒ HTTPS://Example.COM/Path
+https://example.com/path/ ⇒ https://example.com/path/
+two links https://a.example.com/1 and https://b.example.com/2 ⇒ https://a.example.com/1 https://b.example.com/2
+
+## www. without a scheme gets https://
+www.example.com/guide ⇒ https://www.example.com/guide
+See also www.example.com/guide. ⇒ https://www.example.com/guide
+(www.example.com) ⇒ https://www.example.com
+
+## Bare domains are not extracted (§4.1)
+example.com/foo ⇒ ∅
+visit example.co.uk today ⇒ ∅
+
+## Glued to the word before it
+link:https://example.com/glued ⇒ https://example.com/glued
+Checkhttps://example.com/glued ⇒ https://example.com/glued
+
+## Trailing punctuation
+Read https://example.com/a. ⇒ https://example.com/a
+https://example.com/a, then ⇒ https://example.com/a
+https://example.com/a; next ⇒ https://example.com/a
+https://example.com/a: note ⇒ https://example.com/a
+wow https://example.com/a! ⇒ https://example.com/a
+Is it https://example.com/is-it? not sure ⇒ https://example.com/is-it
+https://example.com/a... ⇒ https://example.com/a
+See https://example.com/guide/getting-started. Then the API page ⇒ https://example.com/guide/getting-started
+https://example.com/a-long-pa… ⇒ https://example.com/a-long-pa
+
+## Quotes and brackets
+"https://example.com/quoted" ⇒ https://example.com/quoted
+'https://example.com/single' ⇒ https://example.com/single
+(see https://x.com/a) ⇒ https://x.com/a
+https://example.com/a). ⇒ https://example.com/a
+[https://example.com/b] ⇒ https://example.com/b
+{https://example.com/c} ⇒ https://example.com/c
+<https://example.com/angle> ⇒ https://example.com/angle
+> https://example.com/reply ⇒ https://example.com/reply
+https://en.wikipedia.org/wiki/Foo_(bar) ⇒ https://en.wikipedia.org/wiki/Foo_(bar)
+(https://en.wikipedia.org/wiki/Foo_(bar)) ⇒ https://en.wikipedia.org/wiki/Foo_(bar)
+https://en.wikipedia.org/wiki/Schindler's_List ⇒ https://en.wikipedia.org/wiki/Schindler's_List
+
+## Markdown written as plain text
+[React docs](https://react.dev/learn) — start here ⇒ https://react.dev/learn
+![alt](https://example.com/img.png) ⇒ https://example.com/img.png
+
+## Emphasis: stripped only when the same mark opens the URL
+*https://example.com/bold* ⇒ https://example.com/bold
+**https://example.com/bold2** ⇒ https://example.com/bold2
+_https://example.com/italic_ ⇒ https://example.com/italic
+~https://example.com/strike~ ⇒ https://example.com/strike
+https://youtu.be/ZyXwVuTsRqP?si=Ab12_cd34efgh5_ ⇒ https://youtu.be/ZyXwVuTsRqP?si=Ab12_cd34efgh5_
+
+## Invisible characters end a URL
+https://example.com/lrm\u{200E} ⇒ https://example.com/lrm
+\u{200E}https://example.com/lrm-before ⇒ https://example.com/lrm-before
+https://example.com/zwsp\u{200B}tail ⇒ https://example.com/zwsp
+\u{FEFF}https://example.com/bom ⇒ https://example.com/bom
+https://example.com/nbsp\u{00A0}next ⇒ https://example.com/nbsp
+https://example.com/nnbsp\u{202F}PM ⇒ https://example.com/nnbsp
+👨\u{200D}💻 https://example.dev/tools ⇒ https://example.dev/tools
+
+## Emoji end a URL
+https://example.com/funny😂😂 ⇒ https://example.com/funny
+https://example.com/a👍\u{FE0F} ⇒ https://example.com/a
+
+## CJK punctuation ends a URL; Unicode paths are kept
+リンク：https://example.jp/page、次 ⇒ https://example.jp/page
+「https://example.jp/quote」 ⇒ https://example.jp/quote
+（https://example.jp/paren） ⇒ https://example.jp/paren
+https://example.jp/page。 ⇒ https://example.jp/page
+https://ja.wikipedia.org/wiki/東京 ⇒ https://ja.wikipedia.org/wiki/東京
+
+## Hosts
+https://localhost:3000/dev ⇒ https://localhost:3000/dev
+http://192.168.1.10:8080/admin ⇒ http://192.168.1.10:8080/admin
+http://[::1]:3000/ ⇒ http://[::1]:3000/
+https://user:pass@example.com/secret ⇒ https://user:pass@example.com/secret
+https://example ⇒ ∅
+https://. ⇒ ∅
+
+## Not web links (counted as skipped, never stored)
+mail me at mailto:someone@example.com ⇒ ∅
+call tel:+441632960123 ⇒ ∅
+whatsapp://send?text=hi ⇒ ∅
+javascript:alert(1) ⇒ ∅
+
+## Code: template placeholders are not links
+const url = `https://api.example.com/users/${userId}`; ⇒ ∅
+https://example.com/{{slug}} ⇒ ∅
+
+## Fragments and queries are kept as found
+https://docs.google.com/presentation/d/abc123/edit#slide=id.p (needs access) ⇒ https://docs.google.com/presentation/d/abc123/edit#slide=id.p
+https://app.example/#/inbox ⇒ https://app.example/#/inbox
+https://shop.example.com/search?q=oak,shelf&colour=light%20brown&utm_source=newsletter ⇒ https://shop.example.com/search?q=oak,shelf&colour=light%20brown&utm_source=newsletter

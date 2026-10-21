@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 21 October 2026 (v2.5: post-MVP acceptance criteria; see Document history) |
+| **Updated** | 21 October 2026 (v2.6: URL rules from the first real export; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -141,26 +141,29 @@ All of this runs inside a Web Worker (`lib/workers/extract.worker.ts`) and posts
 
 ### 4.1 Find candidates
 
-M1 opens with a short spike: run `linkify-it` (the matcher behind markdown-it; pure JS, runs in a worker) over `urls-edge-cases.txt` with schemeless ("fuzzy") matching turned off, checking that `www.` links still match. It already handles trailing punctuation, balanced brackets, quotes and Unicode. If it passes or comes close, use it for finding and most of repair (§4.2), and keep only the rules it misses. Otherwise, the working regex (refine with fixtures):
+A hand-written regex, chosen in the M1 spike (21 Oct 2026). `linkify-it` 5.0.2, with schemeless matching off, passed 47 of the 65 cases in `urls-edge-cases.txt`. It finds no `www.` links unless bare domains are switched on too, keeps U+200E (which iOS exports insert) and CJK punctuation inside URLs, misses emphasis marks and `Checkhttps://` glued to a word, and rejects `[::1]`. Fixing that would take as many rules as the regex. The regex with the repair rules below passed all 65, found the same 4,644 links as `linkify-it` in the owner's export, and ran about 3× faster.
 
 ```
-/\b(?:https?:\/\/|www\.)[^\s<>"`\p{Cf}、。」）]+/giu
+/(?:https?:\/\/|(?<![\p{L}\p{N}.-])www\.)[^\s<>"`\p{Cf}\p{Extended_Pictographic}、。」）]+/giu
 ```
 
-The excluded set adds `\p{Cf}`, the Unicode format characters: zero-width spaces and joiners, bidi marks and the BOM. WhatsApp inserts U+200E, which `\s` does not match, so without this it ends up inside URLs. It also adds full-width CJK punctuation (`、` `。` `」` `）`). `\p{…}` needs the `u` flag. `'` is deliberately not excluded: it is legal in paths and shows up in Wikipedia titles and slugs (`/wiki/Schindler's_List`); a trailing one is trimmed by repair (§4.2).
+Emoji (`\p{Extended_Pictographic}`) end a match too: real URLs practically never contain them, and `https://…😂` is a common way to type in a chat. The lookbehind needs Safari 16.4, the browser floor already (§10).
+
+There is no `\b` before the scheme, so a URL glued to the word before it (`Checkhttps://…`) is still found; `www.` needs a lookbehind instead, so `awww.` and `foo.www.` don't match. The excluded set adds `\p{Cf}`, the Unicode format characters: zero-width spaces and joiners, bidi marks and the BOM. WhatsApp inserts U+200E, which `\s` does not match, so without this it ends up inside URLs. It also adds full-width CJK punctuation (`、` `。` `」` `）`). `\p{…}` needs the `u` flag. `'` is deliberately not excluded: it is legal in paths and shows up in Wikipedia titles and slugs (`/wiki/Schindler's_List`); a trailing one is trimmed by repair (§4.2).
 
 The Markdown adapter (Phase 1.5) adds `[text](url)`, `<url>`, `![alt](src)` and reference definitions; the bookmarks and HTML adapters (Phase 1.5) add `href`/`src` attributes. Until then the generic pattern still finds those URLs, and repair drops the `)` of `[text](url)`. Structural matches report their spans, and the generic regex runs only over the text outside those spans, so no URL is counted twice. Bare domains without a scheme (`example.com/foo`) are **not** extracted by default. An "aggressive" toggle can enable a stricter bare-domain pattern later; false positives are worse than misses here.
 
 ### 4.2 Repair
 
-- Trim trailing `.,;:!?'"` and closing `)]}` when unbalanced against the URL's own openers (so `https://en.wikipedia.org/wiki/Foo_(bar)` survives, `(see https://x.com/a)` loses the `)`).
-- Strip trailing `*` / `_` / `~` (markdown and WhatsApp emphasis, WhatsApp strikethrough) and `>` (quoted).
+- Trim trailing `.,;:!?'">…` and closing `)]}` when unbalanced against the URL's own openers (so `https://en.wikipedia.org/wiki/Foo_(bar)` survives, `(see https://x.com/a)` loses the `)`). Repeat until nothing changes (`https://example.com/a).` loses both).
+- Strip trailing `*` / `_` / `~` (markdown and WhatsApp emphasis, WhatsApp strikethrough) only as many times as the same mark sits right before the URL (`**https://x/**` loses two). Tokens can end in `_` (two YouTube `si` values in the owner's export did), so an unopened mark stays.
 - Prepend `https://` to `www.` matches.
 
 ### 4.3 Validate
 
 - `new URL(candidate)` must succeed and the protocol must be `http:` or `https:`. `mailto:`, `tel:`, `whatsapp://`, `intent://` are counted in stats as "skipped, non-web" but not stored.
-- Hosts must contain a dot or be `localhost` / an IP. Reject `https://.` style garbage.
+- Hosts must have at least two non-empty labels or be `localhost` / an IP. Reject `https://.` style garbage.
+- Reject template placeholders (`${…}`, `{{…}}`): code pasted into a chat (`` `https://api.example.com/users/${id}` ``) is not a link. The owner's export had 3.
 
 ### 4.4 Canonicalize (for display cleanup and dedupe)
 
@@ -170,7 +173,7 @@ Store three forms: `url` (as found, repaired), `canonicalUrl` (cleaned, for disp
 
 - lowercase scheme and host; drop default port; drop userinfo
 - keep `#fragment` (anchors and Google Docs `#slide=` links matter when the link is opened or exported)
-- remove tracking parameters by the configured rules (Appendix B). A rule names a parameter (prefix wildcards allowed: `utm_*`) and optionally the hosts it applies to (`t` and `s` only on twitter.com / x.com) or the hosts it is exempt on (`ref` everywhere except code hosts, where it names a branch)
+- remove tracking parameters by the configured rules (Appendix B). A rule names a parameter (prefix wildcards allowed: `utm_*`) and optionally the hosts it applies to (`t` only on twitter.com / x.com), the hosts it is exempt on (`ref` everywhere except code hosts, where it names a branch), or a pattern its value must match (`s` with two digits, everywhere)
 - strip by filtering the raw query string (`url.search` split on `&`), never through `URLSearchParams`: deleting one key makes it re-serialize every remaining parameter (`?q=a,b&utm_source=x` → `?q=a%2Cb`, `%20` → `+`), which changes the displayed URL and occasionally what the server receives
 - remove an empty `?`
 
@@ -200,12 +203,12 @@ Use the public suffix list (`tldts`) to get the **registrable domain**: `m.youtu
 
 ### 4.7 Shorteners
 
-Hosts in a known list (`t.co`, `bit.ly`, `tinyurl.com`, `goo.gl`, `lnkd.in`, `youtu.be` excluded) get `isShortened: true` and a facet. Resolution (following the redirect) needs a server and is Phase 2, opt-in.
+Hosts in a known list (`t.co`, `bit.ly`, `tinyurl.com`, `goo.gl`, `lnkd.in`, `share.google`, `search.app`, `youtu.be` excluded), and share links that redirect the same way (`reddit.com/r/<sub>/s/<id>`, `facebook.com/share/…`), get `isShortened: true` and a facet (Appendix B). Share links matter: in the owner's export, 17 % of all links were Reddit `/s/` links, which can't be deduped against the post they point to until they are resolved. Resolution (following the redirect) needs a server and is Phase 2, opt-in.
 
 ### 4.8 Context
 
 - `context`: up to 200 characters of the message around the URL; the drawer highlights the URL inside it.
-- `nearby`: in a chat with yourself, the note about a link is usually a separate message sent just before or after it. When a message is little more than its URL(s) (under about 20 characters of other text), `nearby` takes the previous and next messages from the same sender within 5 minutes, up to 200 characters. The drawer shows it under the context; search and AI tagging use both (§6.9).
+- `nearby`: in a chat with yourself, the note about a link is usually a separate message sent just before or after it. When a message is little more than its URL(s) (under about 20 characters of other text), `nearby` takes the previous and next messages from the same sender within 5 minutes, up to 200 characters, skipping neighbours that are themselves little more than a URL. In the owner's export 89 % of link messages were bare links, so without that rule most `nearby` text would just be other URLs. The drawer shows it under the context; search and AI tagging use both (§6.9).
 
 ---
 
@@ -344,6 +347,7 @@ export interface TrackingParam {   // rules in Appendix B
   param: string;              // exact name, or a prefix wildcard: 'utm_*'
   hosts?: string[];           // only on these registrable domains ('t' → twitter.com, x.com)
   exceptHosts?: string[];     // everywhere except these ('ref' → not on github.com, where it names a branch)
+  value?: string;             // a regex the value must match ('s' with two digits, everywhere; Appendix B)
 }
 
 export interface Settings {
@@ -565,7 +569,7 @@ Per link, "Suggest tags" in the drawer runs the tagging pass for that one link.
 | Icons | `lucide-react` | |
 | Storage | **Dexie** + `dexie-react-hooks` | IndexedDB with migrations, indexes and a live-query hook. Raw input gzipped with the built-in `CompressionStream` |
 | Domain parsing | `tldts` | Public suffix list, small |
-| URL finding | `linkify-it`, if the M1 spike passes the edge-case table; else the regex in §4.1 | Mature punctuation, bracket and Unicode handling |
+| URL finding | Hand-written regex + repair (§4.1–4.2) | `linkify-it` was tried in the M1 spike and passed 47 of 65 edge cases |
 | Lists | `@tanstack/react-virtual` | Virtualized list (and the grouped list in Phase 1.5). `useVirtualizer` returns a mutable instance that React Compiler memoization is known to trip over; verify early in M3 and opt the list components out with `'use no memo'` if needed |
 | URL state | `nuqs` | Typed query-string state for search / sort / filters |
 | Validation | `zod` | Backup import and settings |
@@ -622,7 +626,7 @@ components/
 lib/
   extract/                   PURE: no React, no DOM. Runs in worker and in Vitest (node env)
     adapters/                plaintext.ts, whatsapp.ts, zip.ts, markdown.ts / netscape.ts / html.ts (Phase 1.5), index.ts (registry + detect + scan)
-    url/                     find.ts, repair.ts, validate.ts, canonicalize.ts, key.ts (urlKey + mirrors), domain.ts, classify.ts, shorteners.ts
+    url/                     find.ts, repair.ts, validate.ts, extract.ts (find → repair → validate), canonicalize.ts, key.ts (urlKey + mirrors), domain.ts, classify.ts, shorteners.ts
     context.ts               context and nearby (§4.8)
     keys.ts                  message keys and link ids (§3, §5)
     pipeline.ts              detect → parse → extract → Link[]
@@ -743,7 +747,12 @@ Later, in Phase 4: a small embedding model running in the browser (transformers.
 | Sender names containing `:` in group chats | Split on the **first** `: ` only |
 | System messages containing `: ` (`changed the subject to "Links: misc"`) | Not a sender unless the name is in the chat's sender set (§3) |
 | Message with no sender (system message) | Keep, flag `isSystem`, exclude from stats' sender facet |
-| `<Media omitted>`, `(file attached)`, `This message was deleted` | Parsed as normal messages; contain no URLs; do not count as "links" |
+| `<Media omitted>`, `(file attached)`, `This message was deleted`, `You deleted this message` | Parsed as normal messages; contain no URLs; do not count as "links" |
+| Chat with yourself: one sender, and the notice `Messages to yourself are end-to-end encrypted…` | The notice is a system message; the single sender still forms the sender set (§3) |
+| Blank lines inside a message (a link, an empty line, then an emoji) | Continuation lines, empty ones included, belong to the message |
+| URL glued to the word before it (`Checkhttps://…`) | Found (§4.1) |
+| Template placeholder in a URL (`${id}`, `{{slug}}`) | Not a link (§4.3) |
+| Token ending in `_` (`?si=Ab12_cd34_`) | Kept; only an emphasis mark that also opens the URL is stripped (§4.2) |
 | Multi-line message containing a URL on line 3 | Position records the actual line |
 | URL wrapped in `<>`, `()`, `[]`, `""`, trailing `.`/`,` | Repair rules §4.2 |
 | Wikipedia-style balanced parentheses | Kept |
@@ -970,7 +979,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | Re-exports of a chat | new source / replace / merge | **Merge** into the existing source by message key (§6.1); WhatsApp's export limit rules out replacing |
 | Import dialog | always / only when a decision is needed | **Only when needed**; re-extract fixes a wrong guess |
 | Import atomicity | pending source + lock + startup cleanup / one transaction | **One IndexedDB transaction** (§8.2); batched writes only if Safari can't handle 100 MB that way |
-| URL finder | hand-written regex / `linkify-it` | **`linkify-it`** if the M1 spike passes the edge-case table; the regex in §4.1 otherwise |
+| URL finder | hand-written regex / `linkify-it` | **Hand-written regex**: decided in the M1 spike (65/65 edge cases against 47/65, §4.1) |
 | MVP views and search | list + grouped + compact with field prefixes / list with facets | **List view with facets**; grouped and compact in Phase 1.5, the full search grammar in M6 |
 | Bare domains without scheme | extract / ignore / toggle | **Ignore by default**, toggle later |
 | Tracking-param stripping | on / off / per-domain | **On, with per-host rules**; built-in list in the MVP, editable in Phase 1.5; original always kept |
@@ -1005,7 +1014,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | Changing the canonicalizer or tracking-param list orphans stars, tags and previews | Everything per-URL is keyed by `urlKey`; the canonicalizer is versioned and a change re-keys stored data, including splits and rows whose links are gone (§4.4) |
 | Large inputs freeze the tab | Worker + two-pass scan/parse + batch writes; cancel button; atomic imports (§8.2) |
 | Preview service abused as an open proxy (SSRF) or as a scraper | Guard step in §8.8: scheme checks, address checks at connect time on every hop, redirect cap, size and time caps, Redis-backed rate limit, honest User-Agent |
-| Social links, the ones people send themselves most, preview poorly (Instagram needs a token; X, Facebook and LinkedIn often block) | Expected and labelled "Site blocks previews"; Tier 0 fallback; context and nearby text still feed tagging; the UI says "needs preview" instead of guessing |
+| Social links, the ones people send themselves most, preview poorly (Instagram needs a token; X, Facebook and LinkedIn often block). The owner's export: 46 % of links on X/Twitter, 17 % Reddit share links, 8 % Instagram, and 89 % of link messages with no text beside the link | Expected and labelled "Site blocks previews"; Tier 0 fallback; context and nearby text still feed tagging; the UI says "needs preview" instead of guessing |
 | Tag sprawl (hundreds of near-duplicate tags) | Normalization and aliases, merge suggestions, category threshold, new-tag proposals held as candidates until 5 links share them |
 | Wrong or over-broad AI tags | Confidence gating with an eval-calibrated threshold, review queue, rejected-tag memory, the labeled eval set on every prompt change |
 | Cost surprises | Estimate before every run; own-key mode means the user's own spend limits apply; cheapest-passing model by default (Haiku 5.5 tags 5,000 links for about $0.24); re-runs limited to changed rows |
@@ -1034,9 +1043,9 @@ Expected links (after canonicalization):
 |---|---|---|---|---|---|
 | `https://twitter.com/JussiKemppainen/status/1661482544892882946?t=…&s=08` | `https://twitter.com/JussiKemppainen/status/1661482544892882946` | twitter.com | social | 2023-05-25 19:48 | Cris |
 | `https://youtube.com/shorts/XbcpYQGXu2I?feature=share` | `https://youtube.com/shorts/XbcpYQGXu2I` | youtube.com | video | 2023-05-25 22:54 | Cris |
-| `https://react.gg/?twclid=…&s=08` | `https://react.gg/?s=08` | react.gg | other | 2023-05-30 00:36 | Cris |
+| `https://react.gg/?twclid=…&s=08` | `https://react.gg/` | react.gg | other | 2023-05-30 00:36 | Cris |
 
-`s` is stripped only on Twitter/X (Appendix B). Elsewhere it can carry meaning (WordPress uses `?s=` for search), so `s=08` stays on react.gg.
+On Twitter/X any `s` is stripped. Elsewhere only a two-digit `s` is (Appendix B): the owner's export had 55 such values on GitHub and other sites, the same shape as X's share codes, while a WordPress search (`?s=oak+shelf`) keeps its words.
 
 Markdown:
 
@@ -1059,18 +1068,19 @@ Repo (https://github.com/org/repo).
 
 Tracking params, as `TrackingParam` rules (§5):
 
-- Everywhere: `utm_* fbclid gclid dclid gbraid wbraid msclkid igshid igsh mc_cid mc_eid twclid ttclid ref_src ref_url _ga _gl yclid vero_id oly_anon_id oly_enc_id`.
+- Everywhere: `utm_* fbclid gclid gclsrc dclid gbraid wbraid msclkid igshid igsh mc_cid mc_eid mkt_tok rdt_cid twclid ttclid ref_src ref_url _ga _gl yclid vero_id oly_anon_id oly_enc_id`.
 - `ref`: everywhere except github.com, gitlab.com and bitbucket.org, where it names a branch or tag.
-- `t` and `s`: only on twitter.com / x.com. (`t` on YouTube is a timestamp and stays; `s` is WordPress's search parameter.)
-- `feature` and `si`: only on youtube.com / youtu.be.
+- `t`: only on twitter.com / x.com. (`t` on YouTube is a timestamp and stays.)
+- `s`: any value on twitter.com / x.com; elsewhere only when the value is two digits (`value: '^\\d{2}$'`), the share code that travels with links shared from X. A WordPress search (`?s=oak+shelf`) keeps its words.
+- `feature`: only on youtube.com / youtu.be. `si`: only on youtube.com / youtu.be and open.spotify.com.
 
-Mirrors (same path, same page; rewritten in `urlKey`, §4.4): `x.com, mobile.twitter.com, fxtwitter.com, vxtwitter.com → twitter.com`; `youtu.be/<id> → youtube.com/watch?v=<id>`; `m.youtube.com, www.youtube.com → youtube.com`; `old.reddit.com, np.reddit.com, www.reddit.com → reddit.com`; `m.facebook.com, fb.com → facebook.com`; `<lang>.m.wikipedia.org → <lang>.wikipedia.org`.
+Mirrors (same page; rewritten in `urlKey`, §4.4): `x.com, mobile.twitter.com, fxtwitter.com, vxtwitter.com → twitter.com`; a tweet at `/<user>/status/<id>` or `/i/status/<id>` → `twitter.com/i/status/<id>` (X ignores the username, and the owner's export had both forms); `youtu.be/<id>` and `youtube.com/shorts/<id>` → `youtube.com/watch?v=<id>`; `m.youtube.com, www.youtube.com → youtube.com`; `old.reddit.com, np.reddit.com, www.reddit.com → reddit.com`; `m.facebook.com, fb.com → facebook.com`; `<lang>.m.wikipedia.org → <lang>.wikipedia.org`.
 
 Domain aliases (display grouping, §4.5): every mirror above, plus `music.youtube.com → youtube.com`.
 
-Shorteners: `t.co bit.ly tinyurl.com goo.gl lnkd.in ow.ly buff.ly is.gd rebrand.ly cutt.ly amzn.to fb.me`.
+Shorteners: `t.co bit.ly tinyurl.com goo.gl maps.app.goo.gl g.co share.google search.app lnkd.in ow.ly buff.ly is.gd rebrand.ly cutt.ly amzn.to amzn.eu fb.me`. Share-link paths: `reddit.com/r/<sub>/s/<id>`, `facebook.com/share/…`.
 
-Kind heuristics: `video` = youtube, vimeo, twitch, tiktok, loom, or `.mp4/.webm`; `social` = twitter/x, instagram, threads, bsky.app, mastodon-ish `/@user/`, reddit, facebook, linkedin posts; `code` = github, gitlab, codesandbox, stackblitz, npmjs, crates.io, pypi; `image` = `.png .jpg .jpeg .gif .webp .svg`, imgur; `document` = `.pdf .docx .pptx`, docs.google.com, notion.site; `audio` = spotify, soundcloud, podcasts.apple.com, `.mp3`; else `other`.
+Kind heuristics: `video` = youtube, vimeo, twitch, tiktok, loom, v.redd.it, or `.mp4/.webm`; `social` = twitter/x, instagram, threads, bsky.app, mastodon-ish `/@user/`, reddit, facebook, linkedin posts; `code` = github, gitlab, codesandbox, stackblitz, npmjs, crates.io, pypi; `image` = `.png .jpg .jpeg .gif .webp .svg`, imgur; `document` = `.pdf .docx .pptx`, docs.google.com, notion.site; `audio` = spotify, soundcloud, podcasts.apple.com, `.mp3`; else `other`.
 
 ## Appendix C — Starter prompt for implementation sessions
 
@@ -1114,3 +1124,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 28 Sept 2026 | v2.3: review fixes. CSP via SRI in a static header that grows per milestone; client loader for `ssr: false`; preview cache moved to CDN headers and rate limits to Redis; connect-time SSRF checks; one `urlKey` for all per-URL data, with canonicalizer versioning and per-host tracking-param rules; atomic imports, stable link ids, immutable tag ids, lean in-memory rows, trimmed indexes; two-pass import; `nearby` context; Netscape bookmarks in the MVP; Collections dropped from the MVP; tags renumbered to M6 and previews to M7, with a post-MVP gate; own-key-only AI in M8, hosted mode moved to Phase 3; model default chosen by eval, cost table re-estimated; export escaping, IDN display, Safari storage risk; contradictions between sections resolved |
 | 21 Oct 2026 | v2.4: second review. iOS zip exports in the MVP; updating a chat from a newer export, merged by message key (WhatsApp's export limit rules out replacing); MVP trimmed to plaintext + WhatsApp with a list view and facets, moving the Markdown and Netscape adapters, grouped and compact views, Netscape export and the editable tracking-param list to Phase 1.5 and the field prefixes to M6 (backup import stays as the Safari restore path); single-transaction imports replace the `importing` status and Web Lock; raw input gzipped in a `sourceParts` table; re-keying handles splits and orphans through an as-found `url` on per-URL rows; tracking params stripped from the raw query string; `'` allowed inside URLs, `~` trimmed, `linkify-it` spike in M1; lean rows built in the worker; import dialog only when needed; CSP on `'unsafe-inline'` and no longer presented as protecting a stored key; AI prices and per-model thinking settings updated, Batches API and the `jobs` table dropped; Appendix A `s=08` contradiction fixed |
 | 21 Oct 2026 | v2.5: acceptance criteria for the gate, P1.5 and M6–M8 (§11); a starting eval bar for AI tagging (§8.9); Vimeo thumbnails moved from Tier 1 to Tier 2, since they can't be built from the video ID (§6.8) |
+| 21 Oct 2026 | v2.6: rules from the owner's first export (Android en-GB, 4,644 links) and the M1 spike. Hand-written regex chosen over `linkify-it` (65/65 against 47/65 edge cases); no `\b` before the scheme; emphasis marks stripped only when they also open the URL; template placeholders rejected. Two-digit `s` stripped everywhere (Appendix A's `react.gg` expectation restored), `si` on Spotify, more global tracking params; tweets keyed by id, Shorts folded into `watch?v=`; Google, Amazon and Reddit/Facebook share links flagged as shorteners; `nearby` skips bare-link neighbours; new edge cases in §9; `TrackingParam.value` |
