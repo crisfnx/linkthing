@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 21 October 2026 (v2.7: URL identity rules from M1; see Document history) |
+| **Updated** | 21 October 2026 (v2.8: escaped URLs, alias search; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -90,7 +90,7 @@ An **adapter** turns raw input into a list of `Message`s (a unit of text with op
 
 Rules:
 
-- Detection is a score, not a boolean. When the score is low, the import dialog shows the detected adapter and lets the user override it (§6.1); otherwise the override is offered later as a re-extract (§6.4).
+- Detection is a score from 0 to 1, not a boolean. A specialized adapter is picked at 0.6 or more; plaintext reads anything and scores 0.1, so it wins only when nothing else does. When a specialized adapter scores between 0.2 and 0.6, the import dialog shows the detected adapter and lets the user override it (§6.1); otherwise the override is offered later as a re-extract (§6.4).
 - Adapters are pure TypeScript with no DOM or React dependency, so they run in a Web Worker and under Vitest's Node environment. The bookmarks and HTML adapters therefore use a small attribute tokenizer, not `DOMParser`.
 - Each adapter has a `version`. Sources record the adapter version used; when an adapter's version bumps, the app offers "Re-extract" from the stored raw input.
 - Chat adapters (WhatsApp now, Telegram later) give every message a **key**: a hash of its timestamp truncated to the minute (Android exports carry no seconds, iOS ones do), sender, NFC-normalized text, and a counter for identical messages in the same minute. Link ids derive from it (§5), so a newer export of the same chat merges into the existing source instead of duplicating it (§6.1).
@@ -144,8 +144,10 @@ All of this runs inside a Web Worker (`lib/workers/extract.worker.ts`) and posts
 A hand-written regex, chosen in the M1 spike (21 Oct 2026). `linkify-it` 5.0.2, with schemeless matching off, passed 47 of the 65 cases in `urls-edge-cases.txt`. It finds no `www.` links unless bare domains are switched on too, keeps U+200E (which iOS exports insert) and CJK punctuation inside URLs, misses emphasis marks and `Checkhttps://` glued to a word, and rejects `[::1]`. Fixing that would take as many rules as the regex. The regex with the repair rules below passed all 65, found the same 4,644 links as `linkify-it` in the owner's export, and ran about 3× faster.
 
 ```
-/(?:https?:\/\/|(?<![\p{L}\p{N}.-])www\.)[^\s<>"`\p{Cf}\p{Extended_Pictographic}、。」）]+/giu
+/(?:https?:(?:\/\/|\\\/\\\/|\\u002[fF]\\u002[fF])|(?<![\p{L}\p{N}.-])www\.)[^\s<>"`\p{Cf}\p{Extended_Pictographic}、。」）]+/giu
 ```
+
+**Escaped URLs.** JSON exports and logs often escape slashes (`https:\/\/example.com\/a`) and write characters as `\uXXXX` escapes (`&` as code unit 0026, `/` as 002F); HTML writes `&` as `&amp;`. The pattern accepts an escaped `//` after the scheme, and the stored `url` is decoded: `\/`, `\uXXXX`, and the entities `&amp;` `&quot;` `&apos;` `&lt;` `&gt;` `&#NN;` `&#xNN;`. A JSON string escape that can't be part of a URL (`\n`, `\t`, `\"`, `\\` …) ends it. The match's position still points at the escaped text, so highlighting matches what is on screen. Quoted-printable email text is not decoded here; that waits for the email adapter (Phase 2+).
 
 Emoji (`\p{Extended_Pictographic}`) end a match too: real URLs practically never contain them, and `https://…😂` is a common way to type in a chat. The lookbehind needs Safari 16.4, the browser floor already (§10).
 
@@ -384,7 +386,7 @@ db.version(1).stores({
 });
 ```
 
-Querying strategy: Dexie is the durable store; browsing runs in memory. On load, and again whenever an import reports `done`, the worker reads the links table and posts one lean row per link to the UI: `id`, `urlKey`, `sourceId`, `domain`, `timestamp`, `kind`, `sender` and a lowercased search string (URL, title, folder, context, nearby, sender). The read happens in the worker because IndexedDB always returns whole records: building lean rows on the main thread would mean deserializing every full `Link` there first, hundreds of milliseconds at 50 k links, against the 50 ms budget (§8.6). The Sources facet filters the rows in memory; the drawer and exports read full rows by id. For the same reason the links table is not behind `useLiveQuery`. Small tables (sources, annotations, tags, settings) do use live queries. Search stays under 100 ms without an index; revisit with MiniSearch past ~100 k links.
+Querying strategy: Dexie is the durable store; browsing runs in memory. On load, and again whenever an import reports `done`, the worker reads the links table and posts one lean row per link to the UI: `id`, `urlKey`, `sourceId`, `domain`, `timestamp`, `kind`, `sender` and a lowercased search string (URL, title, folder, context, nearby, sender, and the domain under all its aliases, §6.3). The read happens in the worker because IndexedDB always returns whole records: building lean rows on the main thread would mean deserializing every full `Link` there first, hundreds of milliseconds at 50 k links, against the 50 ms budget (§8.6). The Sources facet filters the rows in memory; the drawer and exports read full rows by id. For the same reason the links table is not behind `useLiveQuery`. Small tables (sources, annotations, tags, settings) do use live queries. Search stays under 100 ms without an index; revisit with MiniSearch past ~100 k links.
 
 ---
 
@@ -414,6 +416,7 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
 ### 6.3 Search, filter, sort
 
 - Search box filters on URL, title, bookmark folder, context, nearby messages and sender; case-insensitive; debounced; results count shown. (M3)
+- Domains are searched under every name they go by (M3). Links are grouped and displayed under one name (`twitter.com`, `youtube.com`), but searching or filtering for an alias finds the whole group, and the other way round: `x.com` finds links shared as twitter.com, `twitter.com` finds x.com links, and the same holds for `youtu.be` ↔ `youtube.com`, `fb.com` ↔ `facebook.com`, `redd.it` ↔ `reddit.com` and every other alias in Appendix B (`aliasesOf` in `lib/extract/url/domain.ts`). True shorteners (`bit.ly`, `t.co`, `share.google`) can't be matched to their target until they are resolved (§4.7), so they are found under their own name.
 - Field prefixes (M6, built together with the tag syntax; until then the facets cover the same ground): `site:twitter`, `domain:youtube.com`, `sender:Cris`, `kind:video`, `after:2023-05`, `before:2024`, `is:starred`, `is:short`, `source:"chat with me"`, `tag:recipes`, `-tag:recipes`, `is:untagged`.
 - Plain-word interpretation (M6): words are matched against tags (with aliases), site names, titles, context, senders and URLs; every word must match something, and stop words (`from`, `on`, `about`, `the`, `my`, `links`) are ignored. So `recipes from twitter` means `tag:recipes site:twitter`. Site names resolve through the domain alias map plus short names (`twitter`, `x`, `youtube`, `yt`, `github`, `gh`, `reddit`, `insta`). The search box shows its interpretation as removable chips, so a wrong guess is visible and fixable.
 - Facet sidebar with counts: domains (top 20 + "more"), kinds, senders, sources, year/month. Multi-select within a facet, AND across facets.
@@ -627,7 +630,8 @@ components/
 lib/
   extract/                   PURE: no React, no DOM. Runs in worker and in Vitest (node env)
     adapters/                plaintext.ts, whatsapp.ts, zip.ts, markdown.ts / netscape.ts / html.ts (Phase 1.5), index.ts (registry + detect + scan)
-    url/                     find.ts, repair.ts, validate.ts, extract.ts (find → repair → validate), canonicalize.ts, key.ts (urlKey + mirrors), domain.ts, classify.ts, shorteners.ts
+    url/                     find.ts, repair.ts, validate.ts, unescape.ts (JSON and HTML escapes), extract.ts (find → repair → decode → validate), canonicalize.ts, key.ts (urlKey + mirrors), domain.ts, classify.ts, shorteners.ts
+    text.ts                  decode file bytes (UTF-8, windows-1252 fallback) and normalize (§9)
     context.ts               context and nearby (§4.8)
     keys.ts                  message keys and link ids (§3, §5)
     pipeline.ts              detect → parse → extract → Link[]
@@ -774,7 +778,8 @@ Later, in Phase 4: a small embedding model running in the browser (transformers.
 | Re-import of identical file | Content-hash warning against every stored part; user can proceed |
 | Newer export of a chat already imported | Offered as an update; only messages with new keys add links (§6.1) |
 | Newer export missing the oldest messages (WhatsApp's export limit) | Nothing stored is lost: updates merge, never replace (§6.1) |
-| Timestamps missing (plain text) | Links have no timestamp; date sorts put them last; date facet shows "no date" |
+| Timestamps missing (plain text, logs, notes) | Links have no timestamp; date sorts put them last; date facet shows "no date". Search, every other facet, dedupe and export work exactly as for dated links |
+| URL escaped in JSON (`https:\/\/…`, `\uXXXX`) or HTML (`&amp;`) | Found and stored decoded (§4.1) |
 | Ambiguous day/month | Inference §3; override in import dialog; stored on the source |
 | Storage quota exceeded | The transaction rolls back (§8.2); catch `QuotaExceededError`, show the storage meter and what to delete |
 | Canonicalizer updated, or (Phase 1.5) tracking-param list edited | Links re-keyed; annotations, previews and classifications follow through merges and splits, and rows whose links are gone are re-keyed from their own `url` (§4.4) |
@@ -815,6 +820,8 @@ Extraction
 Browse
 - [ ] Virtualized list view; dedupe toggle with occurrence counts.
 - [ ] Search across URL, title, context, nearby text and sender; facets filter with counts.
+- [ ] Searching `x.com` finds links grouped as twitter.com and `twitter.com` finds x.com links; the same for `youtu.be` / `youtube.com` and every alias in Appendix B.
+- [ ] Links without a date (plain text, logs) appear in search and every facet; date sorts put them last.
 - [ ] Sort by newest, oldest, domain, frequency.
 - [ ] Details drawer shows context with the URL highlighted, nearby messages, metadata, source and line, copy actions, star.
 - [ ] View state is in the URL; reload restores it.
@@ -1127,3 +1134,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 21 Oct 2026 | v2.5: acceptance criteria for the gate, P1.5 and M6–M8 (§11); a starting eval bar for AI tagging (§8.9); Vimeo thumbnails moved from Tier 1 to Tier 2, since they can't be built from the video ID (§6.8) |
 | 21 Oct 2026 | v2.6: rules from the owner's first export (Android en-GB, 4,644 links) and the M1 spike. Hand-written regex chosen over `linkify-it` (65/65 against 47/65 edge cases); no `\b` before the scheme; emphasis marks stripped only when they also open the URL; template placeholders rejected. Two-digit `s` stripped everywhere (Appendix A's `react.gg` expectation restored), `si` on Spotify, more global tracking params; tweets keyed by id, Shorts folded into `watch?v=`; Google, Amazon and Reddit/Facebook share links flagged as shorteners; `nearby` skips bare-link neighbours; new edge cases in §9; `TrackingParam.value` |
 | 21 Oct 2026 | v2.7: `urlKey` also folds `http`/`https` and `www.`; `redd.it` grouped under reddit.com; share links (20 % of the owner's links) noted as resolvable through M7 previews' `finalUrl` (§4.7) |
+| 21 Oct 2026 | v2.8: URLs escaped in JSON and HTML are found and decoded (§4.1, edge cases); search and filters match a domain under all its aliases, so `x.com` finds twitter.com links (§6.3, §11); undated links are confirmed fully searchable (§9) |

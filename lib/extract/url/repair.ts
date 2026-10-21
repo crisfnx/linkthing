@@ -1,6 +1,8 @@
 const TRAILING = `.,;:!?'">…`;
 const OPENER: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
 const EMPHASIS = "*_~";
+// The `;` of an HTML entity (`&amp;`) belongs to the URL; unescape.ts decodes it.
+const ENTITY_END = /&(?:[a-z]+|#\d+|#x[0-9a-f]+);$/i;
 
 function count(text: string, char: string): number {
   return text.split(char).length - 1;
@@ -18,6 +20,7 @@ export function repairCandidate(raw: string, before: string): string {
     const last = url.at(-1);
     if (last === undefined) break;
     const opener = OPENER[last];
+    if (last === ";" && ENTITY_END.test(url)) break;
     if (
       TRAILING.includes(last) ||
       (opener !== undefined && count(url, opener) < count(url, last))

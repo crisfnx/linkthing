@@ -1,0 +1,8 @@
+Meeting notes 2024-01-10
+Deck: https://docs.google.com/presentation/d/abc123/edit#slide=id.p (needs access)
+Repo (https://github.com/org/repo).
+
+Reading list:
+- [React docs](https://react.dev/learn) — start here
+- <https://vitest.dev>
+- See also www.example.com/guide.
