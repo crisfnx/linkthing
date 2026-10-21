@@ -1,0 +1,6 @@
+25.05.23, 19:48 - Nachrichten und Anrufe sind Ende-zu-Ende-verschlüsselt. Niemand außerhalb dieses Chats kann sie lesen oder anhören, nicht einmal WhatsApp. Tippe, um mehr zu erfahren.
+25.05.23, 19:48 - Cris: https://example.de/artikel
+25.05.23, 19:50 - Cris: <Medien ausgeschlossen>
+26.05.23, 08:15 - Cris: Rezept fürs Wochenende
+https://example.de/rezept
+31.12.23, 23:59 - Cris: Diese Nachricht wurde gelöscht.
