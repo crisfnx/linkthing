@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+next-env.d.ts
+
+# Prettier would re-pad every Markdown table in the PRD.
+*.md
+
+# Fixtures are test inputs; their exact bytes matter.
+tests/fixtures/

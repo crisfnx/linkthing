@@ -628,6 +628,7 @@ lib/
     pipeline.ts              detect → parse → extract → Link[]
     types.ts
   db/
+    types.ts                 persisted records (§5); Link and Message stay in extract/types.ts
     schema.ts                Dexie instance + versions
     repos/                   sources.ts (+ parts, chat updates), links.ts, annotations.ts, settings.ts (+ meta)
     rekey.ts                 canonicalizer-version migration: merges, splits, orphans (§4.4)
@@ -641,6 +642,7 @@ lib/
   query/                     filter.ts (search syntax), sort.ts, facets.ts, stats.ts
   workers/
     extract.worker.ts        imports, updates and library reads (§5, §8.2)
+    protocol.ts              message types; handle.ts routes them (testable without a Worker)
     client.ts                typed wrapper around postMessage
 hooks/
   useImport.ts, useLibrary.ts, useKeyboard.ts, useSettings.ts
@@ -681,7 +683,7 @@ docs/
 - Hosts are displayed in Unicode only when every label is in a single script, as browsers do; mixed-script hosts (a Cyrillic `а` in `аpple.com`) are shown in punycode.
 - Exports escape formula and markup characters (§6.5).
 - Link previews (M7) are opt-in per action, send only URLs to our route handler, and show exactly what will be sent.
-- **Content Security Policy from M0**, as a static header from `headers()` in `next.config.ts`. The bundled guide (`node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`) offers three routes. Nonces force every page into dynamic rendering (no static shell, no CDN caching), so they are not used. `experimental.sri` only adds `integrity` attributes to external scripts, and those do not authorize the inline `<script>` tags in which the App Router streams its payload, so `script-src` needs `'unsafe-inline'`. Check this once in M0 against a production build (`pnpm build && pnpm start`, watching the console for CSP violations); if SRI alone turns out to be enough, drop `'unsafe-inline'` from `script-src`. Styles need `'unsafe-inline'` too: Radix-based dialogs inject a `<style>` tag for scroll locking. Development adds `'unsafe-eval'`.
+- **Content Security Policy from M0**, as a static header from `headers()` in `next.config.ts`. The bundled guide (`node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`) offers three routes. Nonces force every page into dynamic rendering (no static shell, no CDN caching), so they are not used. `experimental.sri` only adds `integrity` attributes to external scripts, and those do not authorize the inline `<script>` tags in which the App Router streams its payload, so `script-src` needs `'unsafe-inline'`. Checked in M0 (21 Oct 2026, Next.js 16.3.4): with `experimental.sri` and `script-src 'self'`, the 5 external scripts got `integrity` attributes, but the page's 2 inline scripts were blocked and hydration failed (React error #412). `'unsafe-inline'` stays; re-check if a Next.js upgrade changes how the payload is delivered. Styles need `'unsafe-inline'` too: Radix-based dialogs inject a `<style>` tag for scroll locking. Development adds `'unsafe-eval'`.
 - The CSP is defense in depth (`connect-src`, `object-src`, `base-uri`, `form-action`, `frame-ancestors`). It does not protect a stored API key: from M7, `img-src https:` lets injected script send data out through an image URL. The protection is having no injection point (the rules above).
 - The header is fixed per deploy, so it cannot widen when one user turns a setting on. It grows by milestone instead:
 
@@ -976,7 +978,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | Collections in the MVP | full collections / none (Sources facet) | **None**; the Sources facet narrows the library, saved searches (Phase 3) give named views |
 | Annotations in MVP | none / star only / star + tags | **Star only**; tags in M6, status and notes in Phase 3 |
 | Search index | in-memory filter / MiniSearch from day one | **In-memory** over lean rows; MiniSearch when > 100 k links |
-| CSP | nonces / `'unsafe-inline'` / SRI | **`'unsafe-inline'`** in a static header: nonces force dynamic rendering, and SRI does not cover the App Router's inline scripts (checked once in M0) |
+| CSP | nonces / `'unsafe-inline'` / SRI | **`'unsafe-inline'`** in a static header: nonces force dynamic rendering, and SRI does not cover the App Router's inline scripts (confirmed in M0: hydration fails without `'unsafe-inline'`) |
 | Order after the MVP | previews → tags → AI / tags → previews → AI | **Phase 1.5 → tags (M6) → previews (M7) → AI (M8)**, set at the gate of real use |
 | Preview fetcher | own route handler / third-party API (Microlink, iframely) | **Own route handler** (§8.8); no per-request cost, URLs stay with us |
 | Preview timing | M7 after the MVP / inside the MVP | **M7**; the MVP keeps its zero-network promise, and the schema and UI slots are already in place |
