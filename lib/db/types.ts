@@ -87,6 +87,7 @@ export interface TrackingParam {
   param: string; // exact name, or a prefix wildcard: 'utm_*'
   hosts?: string[]; // only on these registrable domains
   exceptHosts?: string[]; // everywhere except these
+  value?: string; // a regex the value must match ('s' with two digits)
 }
 
 export interface Settings {
