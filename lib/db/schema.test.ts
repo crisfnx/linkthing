@@ -100,6 +100,7 @@ const settings: Settings = {
   theme: "system",
   defaultDateOrder: "DMY",
   trackingParams: [{ param: "utm_*" }],
+  findBareDomains: true,
   showCanonicalUrls: true,
   dedupeByDefault: false,
   previews: "off",

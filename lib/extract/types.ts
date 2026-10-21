@@ -79,5 +79,8 @@ export interface Link {
   sender?: string;
   kind: LinkKind;
   isShortened: boolean;
+  // Found without a scheme or www. (§4.1). The drawer says so, and turning off
+  // Settings → "Find bare domains" removes these links.
+  isBare?: boolean;
   position: { line: number; column: number; messageIndex: number };
 }

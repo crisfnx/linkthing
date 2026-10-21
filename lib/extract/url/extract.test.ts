@@ -54,6 +54,24 @@ describe("extractUrls positions", () => {
   });
 });
 
+describe("bare domains", () => {
+  test("are flagged; links with a scheme or www. are not", () => {
+    const found = extractUrls(
+      "try codesandbox.io, www.example.com and https://x.com/a",
+    );
+    expect(found.map(({ url, bare }) => [url, bare])).toEqual([
+      ["https://codesandbox.io", true],
+      ["https://www.example.com", false],
+      ["https://x.com/a", false],
+    ]);
+  });
+
+  test("can be turned off", () => {
+    const text = "try codesandbox.io or github.com/org/repo";
+    expect(extractUrls(text, { bareDomains: false })).toEqual([]);
+  });
+});
+
 describe("countNonWebLinks", () => {
   test("counts mailto, tel, whatsapp and intent links", () => {
     const text =
