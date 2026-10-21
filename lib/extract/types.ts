@@ -7,6 +7,14 @@ export type SourceKind =
 
 export type DateOrder = "DMY" | "MDY" | "YMD";
 
+// A tracking-parameter rule (§4.4, Appendix B). Hosts are registrable domains.
+export interface TrackingParam {
+  param: string; // exact name, or a prefix wildcard: 'utm_*'
+  hosts?: string[]; // only on these
+  exceptHosts?: string[]; // everywhere except these
+  value?: string; // a regex the value must match ('s' with two digits)
+}
+
 export interface SourceStats {
   messages: number;
   links: number;

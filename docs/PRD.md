@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 21 October 2026 (v2.6: URL rules from the first real export; see Document history) |
+| **Updated** | 21 October 2026 (v2.7: URL identity rules from M1; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -180,6 +180,7 @@ Store three forms: `url` (as found, repaired), `canonicalUrl` (cleaned, for disp
 `urlKey` = `canonicalUrl`, then:
 
 - rewrite known mirror hosts to one form where the same path is the same page (`x.com`, `mobile.twitter.com` → `twitter.com`; `youtu.be/<id>` → `youtube.com/watch?v=<id>`; full list in Appendix B)
+- use `https` and drop a leading `www.`: `http://www.example.com/a` and `https://example.com/a` are one page in practice
 - drop the fragment, except hash routes (`#/…`, `#!…`), which address different pages of a single-page app
 - drop a trailing `/` on the path; sort query params (displayed URLs keep the original order; `URLSearchParams.sort()` is fine here, because `urlKey` is never shown)
 
@@ -203,7 +204,7 @@ Use the public suffix list (`tldts`) to get the **registrable domain**: `m.youtu
 
 ### 4.7 Shorteners
 
-Hosts in a known list (`t.co`, `bit.ly`, `tinyurl.com`, `goo.gl`, `lnkd.in`, `share.google`, `search.app`, `youtu.be` excluded), and share links that redirect the same way (`reddit.com/r/<sub>/s/<id>`, `facebook.com/share/…`), get `isShortened: true` and a facet (Appendix B). Share links matter: in the owner's export, 17 % of all links were Reddit `/s/` links, which can't be deduped against the post they point to until they are resolved. Resolution (following the redirect) needs a server and is Phase 2, opt-in.
+Hosts in a known list (`t.co`, `bit.ly`, `tinyurl.com`, `goo.gl`, `lnkd.in`, `share.google`, `search.app`, `youtu.be` excluded), and share links that redirect the same way (`reddit.com/r/<sub>/s/<id>`, `facebook.com/share/…`), get `isShortened: true` and a facet (Appendix B). Share links matter: in the owner's export, 17 % of all links were Reddit `/s/` links, and 20 % of all links were flagged in total. None of them can be deduped against the page they point to, or given a title derived from the URL, until they are resolved. The preview service (M7) follows redirects, so a fetched preview's `finalUrl` resolves a shortener without waiting for the Phase 2 resolver; whether to re-key a link on it is an M7 decision. Resolution (following the redirect) needs a server and is Phase 2, opt-in.
 
 ### 4.8 Context
 
@@ -1076,7 +1077,7 @@ Tracking params, as `TrackingParam` rules (§5):
 
 Mirrors (same page; rewritten in `urlKey`, §4.4): `x.com, mobile.twitter.com, fxtwitter.com, vxtwitter.com → twitter.com`; a tweet at `/<user>/status/<id>` or `/i/status/<id>` → `twitter.com/i/status/<id>` (X ignores the username, and the owner's export had both forms); `youtu.be/<id>` and `youtube.com/shorts/<id>` → `youtube.com/watch?v=<id>`; `m.youtube.com, www.youtube.com → youtube.com`; `old.reddit.com, np.reddit.com, www.reddit.com → reddit.com`; `m.facebook.com, fb.com → facebook.com`; `<lang>.m.wikipedia.org → <lang>.wikipedia.org`.
 
-Domain aliases (display grouping, §4.5): every mirror above, plus `music.youtube.com → youtube.com`.
+Domain aliases (display grouping, §4.5): every mirror above, plus `music.youtube.com → youtube.com` and `redd.it → reddit.com` (Reddit's video and image hosts, `v.redd.it` and `i.redd.it`).
 
 Shorteners: `t.co bit.ly tinyurl.com goo.gl maps.app.goo.gl g.co share.google search.app lnkd.in ow.ly buff.ly is.gd rebrand.ly cutt.ly amzn.to amzn.eu fb.me`. Share-link paths: `reddit.com/r/<sub>/s/<id>`, `facebook.com/share/…`.
 
@@ -1125,3 +1126,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 21 Oct 2026 | v2.4: second review. iOS zip exports in the MVP; updating a chat from a newer export, merged by message key (WhatsApp's export limit rules out replacing); MVP trimmed to plaintext + WhatsApp with a list view and facets, moving the Markdown and Netscape adapters, grouped and compact views, Netscape export and the editable tracking-param list to Phase 1.5 and the field prefixes to M6 (backup import stays as the Safari restore path); single-transaction imports replace the `importing` status and Web Lock; raw input gzipped in a `sourceParts` table; re-keying handles splits and orphans through an as-found `url` on per-URL rows; tracking params stripped from the raw query string; `'` allowed inside URLs, `~` trimmed, `linkify-it` spike in M1; lean rows built in the worker; import dialog only when needed; CSP on `'unsafe-inline'` and no longer presented as protecting a stored key; AI prices and per-model thinking settings updated, Batches API and the `jobs` table dropped; Appendix A `s=08` contradiction fixed |
 | 21 Oct 2026 | v2.5: acceptance criteria for the gate, P1.5 and M6–M8 (§11); a starting eval bar for AI tagging (§8.9); Vimeo thumbnails moved from Tier 1 to Tier 2, since they can't be built from the video ID (§6.8) |
 | 21 Oct 2026 | v2.6: rules from the owner's first export (Android en-GB, 4,644 links) and the M1 spike. Hand-written regex chosen over `linkify-it` (65/65 against 47/65 edge cases); no `\b` before the scheme; emphasis marks stripped only when they also open the URL; template placeholders rejected. Two-digit `s` stripped everywhere (Appendix A's `react.gg` expectation restored), `si` on Spotify, more global tracking params; tweets keyed by id, Shorts folded into `watch?v=`; Google, Amazon and Reddit/Facebook share links flagged as shorteners; `nearby` skips bare-link neighbours; new edge cases in §9; `TrackingParam.value` |
+| 21 Oct 2026 | v2.7: `urlKey` also folds `http`/`https` and `www.`; `redd.it` grouped under reddit.com; share links (20 % of the owner's links) noted as resolvable through M7 previews' `finalUrl` (§4.7) |
