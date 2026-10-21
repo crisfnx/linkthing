@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 21 October 2026 (v2.8: escaped URLs, alias search; see Document history) |
+| **Updated** | 21 October 2026 (v2.9: bare domains; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -153,7 +153,15 @@ Emoji (`\p{Extended_Pictographic}`) end a match too: real URLs practically never
 
 There is no `\b` before the scheme, so a URL glued to the word before it (`Checkhttps://…`) is still found; `www.` needs a lookbehind instead, so `awww.` and `foo.www.` don't match. The excluded set adds `\p{Cf}`, the Unicode format characters: zero-width spaces and joiners, bidi marks and the BOM. WhatsApp inserts U+200E, which `\s` does not match, so without this it ends up inside URLs. It also adds full-width CJK punctuation (`、` `。` `」` `）`). `\p{…}` needs the `u` flag. `'` is deliberately not excluded: it is legal in paths and shows up in Wikipedia titles and slugs (`/wiki/Schindler's_List`); a trailing one is trimmed by repair (§4.2).
 
-The Markdown adapter (Phase 1.5) adds `[text](url)`, `<url>`, `![alt](src)` and reference definitions; the bookmarks and HTML adapters (Phase 1.5) add `href`/`src` attributes. Until then the generic pattern still finds those URLs, and repair drops the `)` of `[text](url)`. Structural matches report their spans, and the generic regex runs only over the text outside those spans, so no URL is counted twice. Bare domains without a scheme (`example.com/foo`) are **not** extracted by default. An "aggressive" toggle can enable a stricter bare-domain pattern later; false positives are worse than misses here.
+The Markdown adapter (Phase 1.5) adds `[text](url)`, `<url>`, `![alt](src)` and reference definitions; the bookmarks and HTML adapters (Phase 1.5) add `href`/`src` attributes. Until then the generic pattern still finds those URLs, and repair drops the `)` of `[text](url)`. Structural matches report their spans, and the generic regex runs only over the text outside those spans, so no URL is counted twice.
+
+**Bare domains** (`codesandbox.io`, `github.com/org/repo`), with no scheme and no `www.`, are found by default (the owner's choice in v2.9) and get `https://` added. Chats and notes are full of text that looks like a domain, so a bare match must pass three checks:
+
+- It isn't glued to a word, an email address (`@`) or a file path (`/ \ . _ -`) on either side.
+- Its ending is a real one on the public suffix list (`tldts`). This alone rejects code such as `console.log`, `next.js` and `request.url`: about 100 matches in the owner's export, none of them links.
+- If it has no path, its ending isn't one that is also a common file extension or code word (`design.md`, `setup.sh`, `user.name`, `item.id`; the list is in Appendix B). With a path it counts (`allegro.pl/oferta/1`).
+
+Each such link is stored with `isBare: true`. The drawer says "Found without https://", search can find them with `is:bare` (M6), and Settings → "Find bare domains" turns the feature off, which removes these links (annotations stay, keyed by `urlKey`); turning it back on re-extracts. In the owner's two exports this found 16 bare domains next to 4,761 ordinary links; 2 of the 16 were words joined by a dot rather than sites, which is what the label and the switch are for. Tune the ending list as fixtures and exports show more false positives.
 
 ### 4.2 Repair
 
@@ -285,6 +293,7 @@ export interface Link {
   sender?: string;
   kind: LinkKind;
   isShortened: boolean;
+  isBare?: boolean;           // found without a scheme or www. (§4.1); off in Settings removes these
   position: { line: number; column: number; messageIndex: number };
 }
 
@@ -358,6 +367,7 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark';
   defaultDateOrder: 'DMY' | 'MDY';     // initialised from navigator.language
   trackingParams: TrackingParam[];     // the built-in rules (Appendix B); editable from Phase 1.5, where saving re-keys links (§4.4)
+  findBareDomains: boolean;            // default true (§4.1)
   showCanonicalUrls: boolean;
   dedupeByDefault: boolean;
   previews: 'off' | 'icons' | 'full';   // §6.8 tiers; default 'off'
@@ -411,13 +421,13 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
 - **Compact view** (Phase 1.5): one URL per line, for eyeballing and select-all-copy.
 - **Card view** (M7, with link previews): a responsive grid of preview cards (image, title, domain, date). A card without a fetched preview shows a domain-tinted placeholder with the derived title; fetched previews fill it in (§6.8). It waits for M7 because before previews exist it is mostly placeholders.
 - **Duplicates toggle**: collapse duplicates by `urlKey`, show `×3` badge; expanding shows every occurrence with its own timestamp and context.
-- **Details drawer**: full URL, canonical URL with "what was stripped", context with the URL highlighted, nearby messages (§4.8), message metadata, source name and line number (or bookmark folder, from Phase 1.5), copy buttons, star; from M6 a tag editor with autocomplete, and from M8 AI suggestions (§6.9).
+- **Details drawer**: full URL, canonical URL with "what was stripped", context with the URL highlighted, nearby messages (§4.8), message metadata, source name and line number (or bookmark folder, from Phase 1.5), "Found without https://" for bare domains (§4.1), copy buttons, star; from M6 a tag editor with autocomplete, and from M8 AI suggestions (§6.9).
 
 ### 6.3 Search, filter, sort
 
 - Search box filters on URL, title, bookmark folder, context, nearby messages and sender; case-insensitive; debounced; results count shown. (M3)
 - Domains are searched under every name they go by (M3). Links are grouped and displayed under one name (`twitter.com`, `youtube.com`), but searching or filtering for an alias finds the whole group, and the other way round: `x.com` finds links shared as twitter.com, `twitter.com` finds x.com links, and the same holds for `youtu.be` ↔ `youtube.com`, `fb.com` ↔ `facebook.com`, `redd.it` ↔ `reddit.com` and every other alias in Appendix B (`aliasesOf` in `lib/extract/url/domain.ts`). True shorteners (`bit.ly`, `t.co`, `share.google`) can't be matched to their target until they are resolved (§4.7), so they are found under their own name.
-- Field prefixes (M6, built together with the tag syntax; until then the facets cover the same ground): `site:twitter`, `domain:youtube.com`, `sender:Cris`, `kind:video`, `after:2023-05`, `before:2024`, `is:starred`, `is:short`, `source:"chat with me"`, `tag:recipes`, `-tag:recipes`, `is:untagged`.
+- Field prefixes (M6, built together with the tag syntax; until then the facets cover the same ground): `site:twitter`, `domain:youtube.com`, `sender:Cris`, `kind:video`, `after:2023-05`, `before:2024`, `is:starred`, `is:short`, `is:bare`, `source:"chat with me"`, `tag:recipes`, `-tag:recipes`, `is:untagged`.
 - Plain-word interpretation (M6): words are matched against tags (with aliases), site names, titles, context, senders and URLs; every word must match something, and stop words (`from`, `on`, `about`, `the`, `my`, `links`) are ignored. So `recipes from twitter` means `tag:recipes site:twitter`. Site names resolve through the domain alias map plus short names (`twitter`, `x`, `youtube`, `yt`, `github`, `gh`, `reddit`, `insta`). The search box shows its interpretation as removable chips, so a wrong guess is visible and fixable.
 - Facet sidebar with counts: domains (top 20 + "more"), kinds, senders, sources, year/month. Multi-select within a facet, AND across facets.
 - Sort: newest, oldest, domain A–Z, most frequent domain, recently imported. Links without timestamps sort last within date sorts.
@@ -447,7 +457,7 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
 
 ### 6.7 Settings
 
-Theme, default day/month order (initialised from the browser language), editable tracking-param list (Phase 1.5; saving it re-keys existing links, §4.4), canonical-vs-original display, dedupe default, link-preview tier (§6.8), AI (§6.9), danger zone.
+Theme, default day/month order (initialised from the browser language), editable tracking-param list (Phase 1.5; saving it re-keys existing links, §4.4), "Find bare domains" (on by default; off removes links found without https://, §4.1), canonical-vs-original display, dedupe default, link-preview tier (§6.8), AI (§6.9), danger zone.
 
 ### 6.8 Link previews
 
@@ -767,6 +777,8 @@ Later, in Phase 4: a small embedding model running in the browser (transformers.
 | IDN / punycode hosts | Kept as `URL` normalizes them (punycode); Unicode shown only for single-script hosts (§8.7) |
 | IP hosts, `localhost`, ports, `user:pass@` | Allowed; userinfo removed from canonical URL |
 | Very long URLs (> 2 k chars) | Kept; row truncates with ellipsis in the middle |
+| Bare domain (`codesandbox.io`, `github.com/org/repo`) | Found, `https://` added, `isBare: true`, labelled in the drawer (§4.1) |
+| Looks like a domain but isn't (`console.log`, `next.js`, `design.md`, `user.name`, `jane.design@studio.com`) | Not found: ending not on the public suffix list, an ambiguous ending without a path, or part of an email (§4.1) |
 | Same URL many times | All occurrences stored; dedupe toggle collapses by `urlKey` |
 | Same URL differing only in tracking params, trailing `/` or fragment | Same `urlKey` → collapse together; drawer shows the variants |
 | Same page on a mirror host (`x.com` / `twitter.com`, `youtu.be` / `youtube.com`) | Same `urlKey` (§4.4, Appendix B) |
@@ -815,6 +827,7 @@ Extraction
 - [ ] All cases in `urls-edge-cases.txt` pass.
 - [ ] Original URL, canonical URL and `urlKey` stored; tracking params are stripped per their host rules, and the rest of the query keeps its original encoding; `urlKey` groups tracking-param, trailing-slash and mirror-host variants.
 - [ ] Domain grouping uses the registrable domain and the alias map.
+- [ ] Bare domains in the edge-case table are found and flagged `isBare`; the code, file-name and email look-alikes there are not; with the setting off, none are found.
 - [ ] A canonicalizer version bump re-keys stored links, and stars survive it, including stars on URLs whose source was deleted.
 
 Browse
@@ -989,7 +1002,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | Import atomicity | pending source + lock + startup cleanup / one transaction | **One IndexedDB transaction** (§8.2); batched writes only if Safari can't handle 100 MB that way |
 | URL finder | hand-written regex / `linkify-it` | **Hand-written regex**: decided in the M1 spike (65/65 edge cases against 47/65, §4.1) |
 | MVP views and search | list + grouped + compact with field prefixes / list with facets | **List view with facets**; grouped and compact in Phase 1.5, the full search grammar in M6 |
-| Bare domains without scheme | extract / ignore / toggle | **Ignore by default**, toggle later |
+| Bare domains without scheme | extract / ignore / toggle | **Find by default, checked and labelled** (owner's choice, v2.9): public-suffix ending, no ambiguous ending without a path, `isBare` label, Settings switch to turn off (§4.1) |
 | Tracking-param stripping | on / off / per-domain | **On, with per-host rules**; built-in list in the MVP, editable in Phase 1.5; original always kept |
 | URL identity | `url` / `canonicalUrl` / a separate dedupe key | **`urlKey`** for dedupe and every per-URL table; canonicalizer versioned, with re-keying (§4.4); per-URL rows keep an as-found `url` so orphans can be re-keyed |
 | Collections in the MVP | full collections / none (Sources facet) | **None**; the Sources facet narrows the library, saved searches (Phase 3) give named views |
@@ -1086,6 +1099,8 @@ Mirrors (same page; rewritten in `urlKey`, §4.4): `x.com, mobile.twitter.com, f
 
 Domain aliases (display grouping, §4.5): every mirror above, plus `music.youtube.com → youtube.com` and `redd.it → reddit.com` (Reddit's video and image hosts, `v.redd.it` and `i.redd.it`).
 
+Ambiguous endings for bare domains (§4.1), counted only with a path. File extensions: `md sh py rs pl pm cc mm java ps zip mov gd mk ml sc gs`. Code words: `name id style host click show run new global data map events menu email group`. Left out on purpose, because real sites use them bare: `ai app so info page site link live top one media city art`.
+
 Shorteners: `t.co bit.ly tinyurl.com goo.gl maps.app.goo.gl g.co share.google search.app lnkd.in ow.ly buff.ly is.gd rebrand.ly cutt.ly amzn.to amzn.eu fb.me`. Share-link paths: `reddit.com/r/<sub>/s/<id>`, `facebook.com/share/…`.
 
 Kind heuristics: `video` = youtube, vimeo, twitch, tiktok, loom, v.redd.it, or `.mp4/.webm`; `social` = twitter/x, instagram, threads, bsky.app, mastodon-ish `/@user/`, reddit, facebook, linkedin posts; `code` = github, gitlab, codesandbox, stackblitz, npmjs, crates.io, pypi; `image` = `.png .jpg .jpeg .gif .webp .svg`, imgur; `document` = `.pdf .docx .pptx`, docs.google.com, notion.site; `audio` = spotify, soundcloud, podcasts.apple.com, `.mp3`; else `other`.
@@ -1135,3 +1150,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 21 Oct 2026 | v2.6: rules from the owner's first export (Android en-GB, 4,644 links) and the M1 spike. Hand-written regex chosen over `linkify-it` (65/65 against 47/65 edge cases); no `\b` before the scheme; emphasis marks stripped only when they also open the URL; template placeholders rejected. Two-digit `s` stripped everywhere (Appendix A's `react.gg` expectation restored), `si` on Spotify, more global tracking params; tweets keyed by id, Shorts folded into `watch?v=`; Google, Amazon and Reddit/Facebook share links flagged as shorteners; `nearby` skips bare-link neighbours; new edge cases in §9; `TrackingParam.value` |
 | 21 Oct 2026 | v2.7: `urlKey` also folds `http`/`https` and `www.`; `redd.it` grouped under reddit.com; share links (20 % of the owner's links) noted as resolvable through M7 previews' `finalUrl` (§4.7) |
 | 21 Oct 2026 | v2.8: URLs escaped in JSON and HTML are found and decoded (§4.1, edge cases); search and filters match a domain under all its aliases, so `x.com` finds twitter.com links (§6.3, §11); undated links are confirmed fully searchable (§9) |
+| 21 Oct 2026 | v2.9: bare domains found by default (owner's choice): public-suffix check, ambiguous endings need a path, `Link.isBare` with a drawer label and `is:bare`, `Settings.findBareDomains` to turn it off (§4.1, §5, §6, §9, §11, §14, Appendix B) |

@@ -18,9 +18,35 @@ www.example.com/guide ⇒ https://www.example.com/guide
 See also www.example.com/guide. ⇒ https://www.example.com/guide
 (www.example.com) ⇒ https://www.example.com
 
-## Bare domains are not extracted (§4.1)
-example.com/foo ⇒ ∅
-visit example.co.uk today ⇒ ∅
+## Bare domains: found, with https:// added, when the ending is a real one (§4.1)
+example.com/foo ⇒ https://example.com/foo
+visit example.co.uk today ⇒ https://example.co.uk
+try codesandbox.io ⇒ https://codesandbox.io
+Visit codesandbox.io. ⇒ https://codesandbox.io
+see notion.so and v0.dev ⇒ https://notion.so https://v0.dev
+GitHub.com ⇒ https://GitHub.com
+teamspeak.redjex.com ⇒ https://teamspeak.redjex.com
+(see github.com/org/repo) ⇒ https://github.com/org/repo
+github.com/org/repo. ⇒ https://github.com/org/repo
+allegro.pl/oferta/123 ⇒ https://allegro.pl/oferta/123
+
+## Bare-looking text that isn't a domain: code, file names, emails, abbreviations
+console.log(x) ⇒ ∅
+next.js is great ⇒ ∅
+const u = request.url; ⇒ ∅
+read design.md first ⇒ ∅
+run setup.sh ⇒ ∅
+python main.py ⇒ ∅
+unzip archive.zip ⇒ ∅
+clip.mov ⇒ ∅
+user.name and item.id ⇒ ∅
+version v1.2.3 ⇒ ∅
+e.g. this, i.e. that ⇒ ∅
+someone@example.com ⇒ ∅
+jane.design@studio.com ⇒ ∅
+/usr/local/bin/setup.sh ⇒ ∅
+./src/app.ts ⇒ ∅
+mr.bean ⇒ ∅
 
 ## Glued to the word before it
 link:https://example.com/glued ⇒ https://example.com/glued

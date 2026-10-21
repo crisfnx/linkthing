@@ -93,6 +93,7 @@ export interface Settings {
   theme: "system" | "light" | "dark";
   defaultDateOrder: "DMY" | "MDY";
   trackingParams: TrackingParam[]; // built-in rules; editable from Phase 1.5
+  findBareDomains: boolean; // default true; off removes links with isBare (§4.1)
   showCanonicalUrls: boolean;
   dedupeByDefault: boolean;
   previews: "off" | "icons" | "full";
