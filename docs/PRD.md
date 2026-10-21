@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 21 October 2026 (v2.9: bare domains; see Document history) |
+| **Updated** | 21 October 2026 (v2.10: WhatsApp adapter rules; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -93,7 +93,7 @@ Rules:
 - Detection is a score from 0 to 1, not a boolean. A specialized adapter is picked at 0.6 or more; plaintext reads anything and scores 0.1, so it wins only when nothing else does. When a specialized adapter scores between 0.2 and 0.6, the import dialog shows the detected adapter and lets the user override it (§6.1); otherwise the override is offered later as a re-extract (§6.4).
 - Adapters are pure TypeScript with no DOM or React dependency, so they run in a Web Worker and under Vitest's Node environment. The bookmarks and HTML adapters therefore use a small attribute tokenizer, not `DOMParser`.
 - Each adapter has a `version`. Sources record the adapter version used; when an adapter's version bumps, the app offers "Re-extract" from the stored raw input.
-- Chat adapters (WhatsApp now, Telegram later) give every message a **key**: a hash of its timestamp truncated to the minute (Android exports carry no seconds, iOS ones do), sender, NFC-normalized text, and a counter for identical messages in the same minute. Link ids derive from it (§5), so a newer export of the same chat merges into the existing source instead of duplicating it (§6.1).
+- Chat adapters (WhatsApp now, Telegram later) give every message a **key**: a hash of its wall-clock minute as written in the export (`2023-05-25 19:48`: Android exports carry no seconds, iOS ones do, and the importing device's time zone must not matter), sender, NFC-normalized text without the edit marker, and a counter for identical messages in the same minute. The hash is cyrb53 (`lib/extract/keys.ts`), fast and synchronous; ids only have to be unique within one library. Link ids derive from it (§5), so a newer export of the same chat merges into the existing source instead of duplicating it (§6.1).
 
 ### WhatsApp format notes (the hard adapter)
 
@@ -115,10 +115,13 @@ AI tools apps in one place sorted by category             continuation line (no 
 Parsing rules:
 
 - Header regex (named groups): optional `‎`, optional `[`, date `\d{1,4}[./-]\d{1,2}[./-]\d{2,4}`, optional `,`, whitespace (incl. ` `), time `\d{1,2}:\d{2}(:\d{2})?` with an optional day-period token before or after it (any short run of letters, dots and spaces: `PM`, `p. m.`, `a.m.`, `오후`, `下午`; new locales arrive as fixture lines), optional `]`, then either ` - ` (Android) or a space (iOS), then the remainder.
-- Remainder splits on the **first** `: ` into sender and message, but only when the candidate sender is in the chat's **sender set**: names that appear as the prefix of at least two headers (collected in the scan pass, §6.1) and don't match a known system-message pattern. Anything else is a system message (kept, flagged `isSystem`, excluded from link extraction unless it contains a URL). This keeps system messages that contain `: ` (`Cris changed the subject to "Links: misc"`) out of the sender list.
+- Remainder splits on the **first** `: ` into sender and message, but only when the candidate sender is in the chat's **sender set**: prefixes that appear before `: ` in at least two headers, or in one header without quote marks (collected in the scan pass, §6.1), and don't match a known system-message pattern (`changed the subject`, `created group`, …). Anything else is a system message (kept, flagged `isSystem`, excluded from link extraction unless it contains a URL). This keeps system messages that contain `: ` (`Cris changed the subject to "Links: misc"`) out of the sender list: they quote the subject, while a person who posts once in a group (common, and often with a link) keeps their name.
+- iPhone exports file system messages under the chat's name, with the text starting with U+200E (`[…] Weekend Crew: (U+200E)Sam created group "Weekend Crew"`). Such a message is a system message with no sender. (Written from the documented format; confirm with a real iPhone export.)
+- ` <This message was edited>` at the end of a message is stripped, so editing a message doesn't change its text, context or key.
+- Day periods: `am`/`pm` in any dotted or spaced form (`PM`, `p. m.`, `a.m.`), `오전`/`오후`, `上午`/`下午`, `午前`/`午後`. Korean dates add spaces and a final dot (`2023. 5. 25. 오후 7:48`). Other tokens are ignored until a fixture line adds them.
 - **Day/month inference:** scan all date tokens in the file. Any first field > 12 → DMY. Any second field > 12 → MDY. Four-digit first field → YMD. Ambiguous → the default from Settings (initialised from `navigator.language`: `en-US` → MDY, most others DMY), with an override in the import dialog. Record the decision on the `Source`. This needs every date in the file, so it runs in the scan pass, before the parse starts (§6.1, §8.2).
 - Two-digit years → 20xx.
-- Lines that don't match the header are appended to the previous message (`\n`-joined).
+- Lines that don't match the header are appended to the previous message (`\n`-joined). Lines before the first header (a cut-off export) become a message of their own, without a date, so no link is lost.
 - Strip BOM, normalize CRLF, tolerate a trailing partial line.
 
 ---
@@ -666,7 +669,7 @@ lib/
 hooks/
   useImport.ts, useLibrary.ts, useKeyboard.ts, useSettings.ts
 tests/
-  fixtures/                  whatsapp-android-gb.txt, whatsapp-android-us.txt, whatsapp-ios.txt, whatsapp-ios.zip,
+  fixtures/                  whatsapp-android-gb.txt, whatsapp-group-gb.txt, whatsapp-android-us.txt, whatsapp-ios.txt, whatsapp-ios.zip,
                              whatsapp-de.txt, whatsapp-update-older.txt + whatsapp-update-newer.txt (overlapping exports),
                              plaintext.txt, urls-edge-cases.txt; markdown.md and bookmarks.html in Phase 1.5
   e2e/                       import-search-export.spec.ts
@@ -762,6 +765,9 @@ Later, in Phase 4: a small embedding model running in the browser (transformers.
 | Sender names containing `:` in group chats | Split on the **first** `: ` only |
 | System messages containing `: ` (`changed the subject to "Links: misc"`) | Not a sender unless the name is in the chat's sender set (§3) |
 | Message with no sender (system message) | Keep, flag `isSystem`, exclude from stats' sender facet |
+| Someone who posts only once in a group | Still a sender, unless the prefix has quote marks (§3) |
+| Contacts you haven't saved (`+44 7700 900123: …`; `added ~ Jordan`, where the space after `~` is U+202F) | The phone number is the sender name; the `~` form appears only in system messages |
+| `<This message was edited>` at the end of a message | Stripped from text, context and key (§3) |
 | `<Media omitted>`, `(file attached)`, `This message was deleted`, `You deleted this message` | Parsed as normal messages; contain no URLs; do not count as "links" |
 | Chat with yourself: one sender, and the notice `Messages to yourself are end-to-end encrypted…` | The notice is a system message; the single sender still forms the sender set (§3) |
 | Blank lines inside a message (a link, an empty line, then an emoji) | Continuation lines, empty ones included, belong to the message |
@@ -1151,3 +1157,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 21 Oct 2026 | v2.7: `urlKey` also folds `http`/`https` and `www.`; `redd.it` grouped under reddit.com; share links (20 % of the owner's links) noted as resolvable through M7 previews' `finalUrl` (§4.7) |
 | 21 Oct 2026 | v2.8: URLs escaped in JSON and HTML are found and decoded (§4.1, edge cases); search and filters match a domain under all its aliases, so `x.com` finds twitter.com links (§6.3, §11); undated links are confirmed fully searchable (§9) |
 | 21 Oct 2026 | v2.9: bare domains found by default (owner's choice): public-suffix check, ambiguous endings need a path, `Link.isBare` with a drawer label and `is:bare`, `Settings.findBareDomains` to turn it off (§4.1, §5, §6, §9, §11, §14, Appendix B) |
+| 21 Oct 2026 | v2.10: WhatsApp adapter rules from the owner's group export (§3): one-time senders keep their name unless quoted; iPhone system messages under the chat's name; edit marker stripped; day-period list; message keys from the wall-clock minute (cyrb53); text before the first header kept; new edge cases in §9 |

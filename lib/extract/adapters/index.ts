@@ -1,8 +1,9 @@
 import type { Adapter, AdapterInput, SourceKind } from "@/lib/extract/types";
 import { plaintext } from "./plaintext";
+import { whatsapp } from "./whatsapp";
 
 // Specialized adapters go before plaintext, which reads anything.
-export const ADAPTERS: readonly Adapter[] = [plaintext];
+export const ADAPTERS: readonly Adapter[] = [whatsapp, plaintext];
 
 // A specialized adapter is picked at 0.6 or more (§3: "≥ 60 % of the first 50
 // non-empty lines" for WhatsApp). Between 0.2 and 0.6 the import dialog asks.

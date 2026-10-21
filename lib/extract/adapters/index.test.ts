@@ -13,7 +13,7 @@ const scoring = (score: number): Adapter => ({
 const input = { text: "anything" };
 
 test("only plaintext available: plaintext, no question", () => {
-  expect(detectAdapter(input)).toEqual({
+  expect(detectAdapter(input, [plaintext])).toEqual({
     kind: "plaintext",
     scores: [{ kind: "plaintext", score: 0.1 }],
     needsConfirmation: false,
