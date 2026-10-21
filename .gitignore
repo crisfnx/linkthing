@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw chat exports used to build fixtures; never committed (PRD §8.5)
+/tests/fixtures/raw/
