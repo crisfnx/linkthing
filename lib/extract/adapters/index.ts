@@ -10,6 +10,12 @@ export const ADAPTERS: readonly Adapter[] = [whatsapp, plaintext];
 const DETECTED = 0.6;
 const UNSURE = 0.2;
 
+// Kinds without an adapter yet (Markdown, bookmarks, HTML, Telegram) are read
+// as plain text until their Phase 1.5 adapters land.
+export function adapterFor(kind: SourceKind): Adapter {
+  return ADAPTERS.find((adapter) => adapter.kind === kind) ?? plaintext;
+}
+
 export interface Detection {
   kind: SourceKind;
   scores: Array<{ kind: SourceKind; score: number }>; // highest first

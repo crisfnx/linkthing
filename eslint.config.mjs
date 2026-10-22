@@ -15,6 +15,37 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // lib/extract runs in a Web Worker and under Vitest's Node environment
+    // (PRD §3), so it must not touch React, Next.js or the DOM.
+    files: ["lib/extract/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["react", "react-dom", "react/*", "react-dom/*"],
+              message: "lib/extract is pure TypeScript.",
+            },
+            {
+              group: ["next", "next/*"],
+              message: "lib/extract is pure TypeScript.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        ...["window", "document", "navigator", "localStorage", "indexedDB"].map(
+          (name) => ({
+            name,
+            message: "lib/extract must run in a worker and in Node.",
+          }),
+        ),
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

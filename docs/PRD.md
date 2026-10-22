@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 21 October 2026 (v2.10: WhatsApp adapter rules; see Document history) |
+| **Updated** | 22 October 2026 (v2.11: M1 complete; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -221,8 +221,9 @@ Hosts in a known list (`t.co`, `bit.ly`, `tinyurl.com`, `goo.gl`, `lnkd.in`, `sh
 
 ### 4.8 Context
 
-- `context`: up to 200 characters of the message around the URL; the drawer highlights the URL inside it.
-- `nearby`: in a chat with yourself, the note about a link is usually a separate message sent just before or after it. When a message is little more than its URL(s) (under about 20 characters of other text), `nearby` takes the previous and next messages from the same sender within 5 minutes, up to 200 characters, skipping neighbours that are themselves little more than a URL. In the owner's export 89 % of link messages were bare links, so without that rule most `nearby` text would just be other URLs. The drawer shows it under the context; search and AI tagging use both (§6.9).
+- `context`: up to 200 characters of the message around the URL, cut with `…` at each end when the message is longer; the drawer highlights the URL inside it. Left out when the message has no text besides its links, and when the URL alone is too long to fit.
+- `nearby`: the assumption was that in a chat with yourself, the note about a link is usually a separate message sent just before or after it. When a message is little more than its URL(s) (under about 20 characters of other text), `nearby` takes the nearest message on each side from the same sender within 5 minutes, up to 200 characters in all (each side on its own line), skipping other senders, system messages, media and deletion placeholders, and neighbours that are themselves little more than a URL. In the owner's export 89 % of link messages were bare links, so without that last rule most `nearby` text would just be other URLs. The drawer shows it under the context; search and AI tagging use both (§6.9).
+- What M1 measured on the owner's exports: in the chat with yourself only 91 of 4,136 bare links (2 %) had a note within 5 minutes; in the group chat, 50 of 102 (49 %), because people talk around the links they share. So for the main use case, context and nearby text rarely say what a link is about, and link previews (M7) are the main source of meaning, for search and for AI tagging (M8).
 
 ---
 
@@ -261,7 +262,7 @@ export interface SourceStats {
   uniqueLinks: number;
   domains: number;
   skippedNonWeb: number;
-  earliest?: number;
+  earliest?: number;          // earliest and latest link timestamps
   latest?: number;
 }
 
@@ -297,7 +298,7 @@ export interface Link {
   kind: LinkKind;
   isShortened: boolean;
   isBare?: boolean;           // found without a scheme or www. (§4.1); off in Settings removes these
-  position: { line: number; column: number; messageIndex: number };
+  position: { line: number; column: number; messageIndex: number };   // line in the file; column within the message's line of text, after any chat header
 }
 
 // No Collection type in the MVP: the Sources facet narrows the library, and saved searches
@@ -644,10 +645,11 @@ lib/
   extract/                   PURE: no React, no DOM. Runs in worker and in Vitest (node env)
     adapters/                plaintext.ts, whatsapp.ts, zip.ts, markdown.ts / netscape.ts / html.ts (Phase 1.5), index.ts (registry + detect + scan)
     url/                     find.ts, repair.ts, validate.ts, unescape.ts (JSON and HTML escapes), extract.ts (find → repair → decode → validate), canonicalize.ts, key.ts (urlKey + mirrors), domain.ts, classify.ts, shorteners.ts
+    input.ts                 unzip (fflate; _chat.txt first, media and __MACOSX skipped), decode, normalize, chat name from the file name
     text.ts                  decode file bytes (UTF-8, windows-1252 fallback) and normalize (§9)
     context.ts               context and nearby (§4.8)
     keys.ts                  message keys and link ids (§3, §5)
-    pipeline.ts              detect → parse → extract → Link[]
+    pipeline.ts              parse → extract → describe → context and nearby → Link[] with stable ids, and the source's stats
     types.ts
   db/
     types.ts                 persisted records (§5); Link and Message stay in extract/types.ts
@@ -692,7 +694,7 @@ docs/
 
 | Scenario | Target |
 |---|---|
-| 10 MB / 150 k-line WhatsApp export, M-series laptop | parsed and saved in < 3 s; main thread never blocked > 50 ms |
+| 10 MB / 150 k-line WhatsApp export, M-series laptop | parsed and saved in < 3 s; main thread never blocked > 50 ms. M1 measured the extraction alone (in Node, no save): a synthetic 10 MB export, 130 k messages and 98 k links, in about 0.8 s; the owner's real 0.5 MB export end to end (unzip to links) in 66 ms |
 | 50 k links in the library | search keystroke → results in < 100 ms; scroll at 60 fps |
 | First load, main route | < 200 kB gzipped JS before the workspace chunk; workspace lazy-loaded |
 | Lighthouse | ≥ 95 performance and accessibility on the empty state |
@@ -1041,7 +1043,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | Changing the canonicalizer or tracking-param list orphans stars, tags and previews | Everything per-URL is keyed by `urlKey`; the canonicalizer is versioned and a change re-keys stored data, including splits and rows whose links are gone (§4.4) |
 | Large inputs freeze the tab | Worker + two-pass scan/parse + batch writes; cancel button; atomic imports (§8.2) |
 | Preview service abused as an open proxy (SSRF) or as a scraper | Guard step in §8.8: scheme checks, address checks at connect time on every hop, redirect cap, size and time caps, Redis-backed rate limit, honest User-Agent |
-| Social links, the ones people send themselves most, preview poorly (Instagram needs a token; X, Facebook and LinkedIn often block). The owner's export: 46 % of links on X/Twitter, 17 % Reddit share links, 8 % Instagram, and 89 % of link messages with no text beside the link | Expected and labelled "Site blocks previews"; Tier 0 fallback; context and nearby text still feed tagging; the UI says "needs preview" instead of guessing |
+| Social links, the ones people send themselves most, preview poorly (Instagram needs a token; X, Facebook and LinkedIn often block). The owner's export: 46 % of links on X/Twitter, 17 % Reddit share links, 8 % Instagram, 89 % of link messages with no text beside the link, and only 2 % of those with a note within 5 minutes (§4.8) | Expected and labelled "Site blocks previews"; Tier 0 fallback; context and nearby text still feed tagging; the UI says "needs preview" instead of guessing |
 | Tag sprawl (hundreds of near-duplicate tags) | Normalization and aliases, merge suggestions, category threshold, new-tag proposals held as candidates until 5 links share them |
 | Wrong or over-broad AI tags | Confidence gating with an eval-calibrated threshold, review queue, rejected-tag memory, the labeled eval set on every prompt change |
 | Cost surprises | Estimate before every run; own-key mode means the user's own spend limits apply; cheapest-passing model by default (Haiku 5.5 tags 5,000 links for about $0.24); re-runs limited to changed rows |
@@ -1158,3 +1160,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 21 Oct 2026 | v2.8: URLs escaped in JSON and HTML are found and decoded (§4.1, edge cases); search and filters match a domain under all its aliases, so `x.com` finds twitter.com links (§6.3, §11); undated links are confirmed fully searchable (§9) |
 | 21 Oct 2026 | v2.9: bare domains found by default (owner's choice): public-suffix check, ambiguous endings need a path, `Link.isBare` with a drawer label and `is:bare`, `Settings.findBareDomains` to turn it off (§4.1, §5, §6, §9, §11, §14, Appendix B) |
 | 21 Oct 2026 | v2.10: WhatsApp adapter rules from the owner's group export (§3): one-time senders keep their name unless quoted; iPhone system messages under the chat's name; edit marker stripped; day-period list; message keys from the wall-clock minute (cyrb53); text before the first header kept; new edge cases in §9 |
+| 22 Oct 2026 | v2.11: M1 complete. Pipeline from bytes to links (`input.ts`, `pipeline.ts`): zip handling, chat name from the file name, context and nearby rules spelled out, column semantics, stats from link timestamps; nearby measured on the owner's exports (2 % of bare links in the chat with yourself, so M7 previews carry the meaning); extraction timings in §8.6 |

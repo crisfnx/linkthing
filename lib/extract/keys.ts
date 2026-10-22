@@ -22,6 +22,18 @@ const SEPARATOR = "\x1f";
 // wall-clock minute ("2023-05-25 19:48"; Android exports carry no seconds, and
 // the importing device's time zone must not matter), sender, NFC-normalized
 // text, and which of several identical messages in that minute it is.
+// A link's id (PRD §5): which message it is in and which link in that message.
+// Chat messages are identified by their key, so a newer export of the chat
+// yields the same ids and merges; other sources by their position ("#12").
+export function linkId(
+  sourceId: string,
+  message: { key?: string; index: number },
+  occurrence: number,
+): string {
+  const where = message.key ?? `#${message.index}`;
+  return hash53([sourceId, where, occurrence].join(SEPARATOR));
+}
+
 export function messageKey(
   minute: string,
   sender: string | undefined,
