@@ -27,6 +27,7 @@ const opened: LinkVaultDb[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
   for (const db of opened.splice(0)) {
     db.close();
     await Dexie.delete(db.name);
@@ -363,5 +364,64 @@ describe("details", () => {
     expect(drawer.querySelector("mark")?.textContent).toBe(
       "bbcgoodfood.com/recipes/custard-tarts",
     );
+  });
+});
+
+describe("the address", () => {
+  test("a bookmarked view opens as it was", () => {
+    window.history.replaceState(null, "", "/?q=youtube&sort=oldest&dedupe=1");
+    const { search } = renderView();
+    expect((search as HTMLInputElement).value).toBe("youtube");
+    expect(
+      (screen.getByRole("combobox", { name: "Sort" }) as HTMLSelectElement)
+        .value,
+    ).toBe("oldest");
+    expect(titles()).toEqual(["YouTube video"]); // two copies, collapsed
+  });
+
+  test("typing replaces the entry; a filter adds one", () => {
+    const push = vi.spyOn(window.history, "pushState");
+    const replace = vi.spyOn(window.history, "replaceState");
+    const { search, sidebar } = renderView();
+
+    fireEvent.change(search, { target: { value: "you" } });
+    fireEvent.change(search, { target: { value: "youtube" } });
+    expect(replace).toHaveBeenLastCalledWith(null, "", "/?q=youtube");
+    expect(push).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      within(sidebar).getByRole("checkbox", { name: /youtube\.com/ }),
+    );
+    expect(push).toHaveBeenCalledOnce();
+    expect(window.location.search).toBe("?q=youtube&site=youtube.com");
+  });
+
+  test("Back puts the view the address holds", () => {
+    const { sidebar } = renderView();
+    fireEvent.click(
+      within(sidebar).getByRole("checkbox", { name: /twitter\.com/ }),
+    );
+    expect(titles()).toEqual(["Post by @exampledev"]);
+
+    // What the browser does on Back: the earlier address, then popstate.
+    act(() => {
+      window.history.replaceState(null, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(titles()).toHaveLength(4);
+    expect(
+      within(sidebar)
+        .getByRole("checkbox", { name: /twitter\.com/ })
+        .matches(":checked"),
+    ).toBe(false);
+  });
+
+  test("an unfiltered view is just the page", () => {
+    window.history.replaceState(null, "", "/?sort=oldest");
+    renderView();
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), {
+      target: { value: "newest" },
+    });
+    expect(window.location.href).toBe("http://localhost:3000/");
   });
 });
