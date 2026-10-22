@@ -15,7 +15,7 @@ export type WorkerRequest =
   | { id: number; type: "cancel" };
 
 // "unexpected" covers anything without its own message in the UI yet, such
-// as a corrupt zip or a database error.
+// as a database error.
 export type WorkerErrorCode =
   InputError["code"] | "cancelled" | "quota-exceeded" | "unexpected";
 

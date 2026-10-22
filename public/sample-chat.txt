@@ -1,0 +1,103 @@
+03/03/2026, 19:02 - Messages and calls are end-to-end encrypted. Only people in this chat can read, listen to, or share them.
+03/03/2026, 19:02 - Ana created group "Sample chat"
+03/03/2026, 19:02 - Ana added Ben and Priya
+03/03/2026, 19:04 - Ana: Starting a group for the Lisbon trip and everything else we keep sending each other
+03/03/2026, 19:05 - Ben: Finally. First things first https://en.wikipedia.org/wiki/Lisbon
+03/03/2026, 19:07 - Priya: Flights look cheapest mid May https://www.google.com/travel/flights?q=flights%20to%20lisbon&utm_source=share
+03/03/2026, 19:09 - Ana: This neighbourhood looks lovely, close to everything
+https://en.wikipedia.org/wiki/Alfama
+03/03/2026, 19:12 - Ben: <Media omitted>
+03/03/2026, 19:12 - Ben: The view from that miradouro 😍
+05/03/2026, 08:41 - Priya: Found a flat with a terrace https://www.booking.com/hotel/pt/example-alfama-terrace.en-gb.html?aid=304142&label=gen173nr&sid=8f2c1a&checkin=2026-05-14&checkout=2026-05-18
+05/03/2026, 08:44 - Ana: Ooh yes. Is it walkable from the tram?
+05/03/2026, 08:46 - Priya: Pretty much https://maps.app.goo.gl/AbCd1234EfGh5678
+05/03/2026, 08:47 - Ben: Booked my time off 🎉
+07/03/2026, 20:15 - Ben: Practising for the trip https://www.youtube.com/watch?v=Ex4mpLeV1d0
+07/03/2026, 20:16 - Ben: (it's a pastel de nata video, not a fado one)
+07/03/2026, 20:20 - Ana: The recipe if anyone's brave (https://en.wikipedia.org/wiki/Pastel_de_nata)
+07/03/2026, 20:22 - Priya: I tried this one last year, works with shop-bought pastry bbcgoodfood.com/recipes/custard-tarts
+11/03/2026, 12:30 - Ana: Lunch break reading https://www.theguardian.com/travel/2026/mar/10/lisbon-beyond-the-trams?utm_source=whatsapp&utm_medium=social
+11/03/2026, 12:34 - Ben: Saw that, the bit about Belém is good
+11/03/2026, 12:35 - Ben: Also https://en.wikipedia.org/wiki/Bel%C3%A9m_Tower
+14/03/2026, 21:03 - Priya: Unrelated but this is the best thing I've seen all week https://x.com/exampledev/status/1900000000000000001
+14/03/2026, 21:05 - Ana: 😂😂 Ben sent me the same one https://twitter.com/exampledev/status/1900000000000000001?s=20
+14/03/2026, 21:06 - Ben: Great minds
+18/03/2026, 18:20 - Ben: For the playlist https://open.spotify.com/track/4ex4mpleTrackId0001?si=a1b2c3d4e5f6
+18/03/2026, 18:21 - Ben: And this one https://open.spotify.com/track/4ex4mpleTrackId0002?si=f6e5d4c3b2a1
+18/03/2026, 18:25 - Priya: Adding some fado https://open.spotify.com/playlist/37i9ex4mplePlaylist
+18/03/2026, 18:26 - Ana: This message was deleted
+18/03/2026, 18:27 - Ana: Wrong chat 🙈
+22/03/2026, 10:10 - Priya: Work thing but you two will like it
+A really clear guide to IndexedDB
+https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB
+22/03/2026, 10:14 - Ben: Bookmarking. Also this repo has been useful https://github.com/dexie/Dexie.js
+22/03/2026, 10:15 - Ben: And the thread about it https://news.ycombinator.com/item?id=40000001
+22/03/2026, 10:30 - Ana: I understood none of that but here's a cat https://www.reddit.com/r/cats/comments/1ex4mp1/this_is_my_cat_now/
+29/03/2026, 17:45 - Ana: Day trip idea https://en.wikipedia.org/wiki/Sintra
+29/03/2026, 17:46 - Ana: Tickets for the palace https://www.parquesdesintra.pt/en/parks-monuments/park-and-national-palace-of-pena/?utm_campaign=spring&gclid=EAIaIQobChMI
+29/03/2026, 17:50 - Priya: Yes! Train from Rossio, 40 min
+29/03/2026, 17:51 - Ben: Can we do Cascais too? https://en.wikipedia.org/wiki/Cascais
+02/04/2026, 09:05 - Priya: Rain jacket that packs into its own pocket https://www.amazon.co.uk/dp/B0EX4MPLE1/ref=cm_sw_r_wa_api?tag=examplewa-21&th=1
+02/04/2026, 09:07 - Ana: I have that one, it's great
+02/04/2026, 09:08 - Ben: Same but cheaper https://www.decathlon.co.uk/p/example-rain-jacket/_/R-p-300001
+09/04/2026, 22:14 - Ben: Watched this on the train, now I want to go to Porto as well https://youtu.be/Ex4mpLePorto?si=Q1w2E3r4T5y6U7i8
+09/04/2026, 22:20 - Priya: Next trip
+09/04/2026, 22:21 - Priya: Porto food guide for later https://www.seriouseats.com/example-porto-food-guide
+15/04/2026, 13:00 - Ana: Restaurant list so far:
+1. https://www.timeout.com/lisbon/restaurants/best-restaurants-in-lisbon
+2. the place from the Guardian article
+3. anywhere with grilled sardines
+15/04/2026, 13:05 - Priya: Adding https://www.tripadvisor.co.uk/Restaurant_Review-g189158-d000001-Reviews-Example_Tasca-Lisbon.html
+15/04/2026, 13:06 - Ben: <Media omitted>
+15/04/2026, 13:06 - Ben: Menu from that tasca
+21/04/2026, 19:40 - Priya: Rail pass vs single tickets https://www.cp.pt/passageiros/en/buy-tickets
+21/04/2026, 19:41 - Priya: Short link they sent me https://bit.ly/ex4mpleCP
+21/04/2026, 19:50 - Ana: Viva Viagem card works on trams and the metro https://en.wikipedia.org/wiki/Viva_Viagem
+28/04/2026, 08:30 - Ben: Packing list https://www.notion.so/example/Lisbon-packing-list-3f2a1b
+28/04/2026, 08:35 - Ana: Add sunscreen and the adaptor
+28/04/2026, 08:36 - Ben: Done <This message was edited>
+06/05/2026, 18:00 - Priya: Weather looking good https://www.ipma.pt/en/otempo/prev.localidade.hora/#Lisboa&Lisboa
+06/05/2026, 18:02 - Ana: 24 degrees!! ☀️
+06/05/2026, 18:03 - Ben: The tram 28 route, for when we get lost https://en.wikipedia.org/wiki/Lisbon_tram_route_28
+13/05/2026, 21:30 - Ana: See you at the airport 6am ✈️
+13/05/2026, 21:31 - Priya: Gate info https://www.flightradar24.com/data/flights/tp1337
+14/05/2026, 15:20 - Ben: <Media omitted>
+14/05/2026, 15:21 - Ben: Made it!
+15/05/2026, 11:02 - Priya: The tile museum is open today https://www.museudoazulejo.gov.pt/en-GB/default.aspx
+15/05/2026, 20:45 - Ana: Tonight's place https://maps.app.goo.gl/Ex4mpleTasca99
+16/05/2026, 10:00 - Ben: Sintra train in 20 min, we're at Rossio
+16/05/2026, 10:01 - Ana: Running late, go without me 🏃‍♀️
+16/05/2026, 18:30 - Priya: <Media omitted>
+16/05/2026, 18:30 - Priya: Pena palace!
+17/05/2026, 13:15 - Ben: Found the custard tart place from the video https://maps.app.goo.gl/Ex4mpleNata01
+19/05/2026, 09:00 - Ana: Home 😢 Photos are all in here https://photos.app.goo.gl/Ex4mpleAlbum2026
+19/05/2026, 09:30 - Priya: Best trip. Porto next year?
+19/05/2026, 09:31 - Ben: 100%
+02/06/2026, 19:10 - Ben: Tried making the tarts https://youtu.be/Ex4mpLeV1d0?si=Zx9Yw8Vu7Ts6Rq5P
+02/06/2026, 19:11 - Ben: Same video as before, it really is the best one
+02/06/2026, 19:20 - Ana: Photos or it didn't happen
+02/06/2026, 19:22 - Ben: <Media omitted>
+10/06/2026, 12:45 - Priya: Reading list for the summer
+https://www.goodreads.com/book/show/000001-example-novel
+https://www.goodreads.com/book/show/000002-another-example
+10/06/2026, 12:50 - Ana: The first one is on sale https://www.waterstones.com/book/example-novel/example-author/9780000000001
+17/06/2026, 20:05 - Ben: This made me laugh https://www.instagram.com/reel/Ex4mpLeReel01/?igsh=ZXhhbXBsZQ==
+17/06/2026, 20:07 - Priya: 😂 also https://www.tiktok.com/@exampleuser/video/7300000000000000001
+24/06/2026, 08:15 - Ana: Podcast for the commute https://podcasts.apple.com/gb/podcast/example-travel-show/id1000000001?i=1000600000001
+24/06/2026, 08:20 - Priya: Same people do a newsletter https://exampletravel.substack.com/p/slow-travel-in-portugal
+01/07/2026, 18:40 - Ben: Porto Airbnb shortlist https://www.airbnb.co.uk/rooms/000000001?check_in=2027-05-10&source_impression_id=p3_ex4mple
+01/07/2026, 18:41 - Ben: https://www.airbnb.co.uk/rooms/000000002?source_impression_id=p3_ex4mple2
+01/07/2026, 18:45 - Priya: A bit early isn't it 😄
+01/07/2026, 18:46 - Ben: Never too early
+15/07/2026, 21:00 - Ana: Found the Guardian piece again for my sister https://www.theguardian.com/travel/2026/mar/10/lisbon-beyond-the-trams
+15/07/2026, 21:02 - Ana: And the Wikipedia one on Alfama https://en.m.wikipedia.org/wiki/Alfama
+29/07/2026, 17:30 - Priya: Free museum days in Porto https://www.visitporto.travel/en-GB/articles/example-free-museums
+29/07/2026, 17:32 - Ben: Serralves looks great https://en.wikipedia.org/wiki/Serralves
+12/08/2026, 10:10 - Ana: Has anyone got the train timetable link?
+12/08/2026, 10:12 - Priya: https://www.cp.pt/passageiros/en/train-times
+12/08/2026, 10:13 - Ana: Thank you!
+26/08/2026, 19:00 - Ben: Last one for the playlist https://music.youtube.com/watch?v=Ex4mpLeSong1&si=ab12cd34
+26/08/2026, 19:05 - Priya: Good choice
+09/09/2026, 08:55 - Ana: Look what's back https://m.youtube.com/watch?v=Ex4mpLeV1d0&feature=shared
+09/09/2026, 08:56 - Ben: My video 😤
+09/09/2026, 08:57 - Priya: Ben's video now

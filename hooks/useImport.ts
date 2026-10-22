@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { inputSize } from "@/lib/import/limits";
 import type { ImportProgress } from "@/lib/import/options";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
@@ -15,6 +16,7 @@ export type ImportState =
   | {
       status: "running";
       label: string; // the file's name, or "Pasted text"
+      size: number; // in bytes, for the large-file note
       progress: ImportProgress;
       remaining: number; // files queued after this one
     }
@@ -26,6 +28,7 @@ export type ImportState =
       code: WorkerErrorCode;
       message: string;
       results: Imported[]; // files imported before this one
+      rest: Item[]; // this one and those queued after it, for Try again
     };
 
 // Settles the scan's questions before the save (§6.1), or skips the input
@@ -42,7 +45,7 @@ interface Options {
   decide?: Decide;
 }
 
-interface Item {
+export interface Item {
   label: string;
   input: ScanInput;
 }
@@ -56,6 +59,9 @@ export function useImport({
   const [state, setState] = useState<ImportState>({ status: "idle" });
   const client = useRef<ExtractClient | null>(null);
   const busy = useRef(false);
+  // A cancel can land after the scan's last check and be missed by the
+  // worker, so the queue checks it before every save as well.
+  const cancelled = useRef(false);
 
   // The worker starts with the first import and lasts as long as the page.
   useEffect(
@@ -66,12 +72,13 @@ export function useImport({
     [],
   );
 
-  async function importAll(items: Item[]) {
+  async function importAll(items: Item[], earlier: Imported[] = []) {
     if (items.length === 0 || busy.current) return;
     busy.current = true;
+    cancelled.current = false;
     client.current ??= connect();
     const worker = client.current;
-    const results: Imported[] = [];
+    const results = [...earlier];
     let last: ImportState = { status: "done", results };
 
     for (const [i, { label, input }] of items.entries()) {
@@ -79,12 +86,16 @@ export function useImport({
         setState({
           status: "running",
           label,
+          size: inputSize(input),
           progress,
           remaining: items.length - i - 1,
         });
       report({ phase: "reading" });
       try {
         const choice = await decide(await worker.scan(input, report));
+        if (cancelled.current) {
+          throw new WorkerError("cancelled", "Cancelled before saving");
+        }
         if (choice !== null) results.push(await worker.start(choice, report));
       } catch (error) {
         const code = error instanceof WorkerError ? error.code : "unexpected";
@@ -92,7 +103,14 @@ export function useImport({
         last =
           code === "cancelled"
             ? { status: "cancelled", results }
-            : { status: "failed", label, code, message, results };
+            : {
+                status: "failed",
+                label,
+                code,
+                message,
+                results,
+                rest: items.slice(i),
+              };
         break;
       }
     }
@@ -110,6 +128,12 @@ export function useImport({
           ? []
           : [{ label: strings.pastedText, input: { text } }],
       ),
-    cancel: () => client.current?.cancel(),
+    cancel: () => {
+      cancelled.current = true;
+      client.current?.cancel();
+    },
+    retry: () => {
+      if (state.status === "failed") void importAll(state.rest, state.results);
+    },
   };
 }

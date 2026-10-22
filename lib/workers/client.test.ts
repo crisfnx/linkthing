@@ -105,7 +105,8 @@ test("a scan is imported once; starting again needs a new scan", async () => {
 test("cancel while saving rejects with 'cancelled' and leaves no rows", async () => {
   const db = freshDb();
   const client = createExtractClient(fakeWorker(db));
-  await client.scan({ text: manyLinks(2500) });
+  // Just over one chunk, since rolling back is slow in fake-indexeddb.
+  await client.scan({ text: manyLinks(1200) });
   const importing = client.start({}, (p) => {
     if (p.done === 1000) client.cancel();
   });

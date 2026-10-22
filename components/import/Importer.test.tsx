@@ -8,10 +8,14 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { ImportProgress } from "@/lib/import/options";
+import { loadSample } from "@/lib/import/sample";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import { WorkerError, type ExtractClient } from "@/lib/workers/client";
 import { Importer } from "./Importer";
+
+// Fetching the sample has its own test in lib/import; here it's a file.
+vi.mock("@/lib/import/sample", () => ({ loadSample: vi.fn() }));
 
 const at = (y: number, mo: number, d: number) =>
   new Date(y, mo - 1, d).getTime();
@@ -200,10 +204,12 @@ describe("while importing", () => {
       "4644",
     ]);
     expect(screen.getByRole("status").textContent).toBe("Saving…");
+    // Marked, not disabled, so whatever has focus keeps it.
     expect(
-      (screen.getByRole("button", { name: "Import text" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+      screen
+        .getByRole("button", { name: "Import text" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
 
     await act(async () => finish(imported()));
     expect(screen.getByRole("status").textContent).toBe("Import finished.");
@@ -241,6 +247,62 @@ describe("while importing", () => {
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 
+  test("a cancel the scan missed still stops the import before it saves", async () => {
+    const client = fakeClient();
+    let finishScan: (scan: ScanResult) => void = () => {};
+    client.scan.mockImplementation(async (_input, onProgress) => {
+      onProgress?.({ phase: "scanning" });
+      return new Promise<ScanResult>((resolve) => (finishScan = resolve));
+    });
+    renderImporter(client);
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [fileNamed("me.txt")], getData: () => "" },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    await act(async () => finishScan(scanned)); // finished after all
+
+    expect(screen.getByRole("status").textContent).toBe(
+      "Import cancelled. Nothing from it was saved.",
+    );
+    expect(client.start).not.toHaveBeenCalled();
+  });
+
+  test("a large file gets a note that it will take a while", async () => {
+    const client = fakeClient();
+    client.start.mockImplementation(() => new Promise<Imported>(() => {}));
+    renderImporter(client);
+    const file = fileNamed("WhatsApp Chat with Me.txt");
+    Object.defineProperty(file, "size", { value: 30_000_000 });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file], getData: () => "" },
+    });
+
+    const progress = await screen.findByRole("region", {
+      name: "Import progress",
+    });
+    expect(progress.textContent).toContain(
+      "That's 30 MB, so importing it may take a few minutes.",
+    );
+  });
+
+  test("a file over 100 MB is turned away, with what to do instead", async () => {
+    const client = fakeClient();
+    client.scan.mockRejectedValue(new WorkerError("too-large", "too-large"));
+    renderImporter(client);
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: {
+        files: [fileNamed("WhatsApp Chat - Me.zip")],
+        getData: () => "",
+      },
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Couldn't import WhatsApp Chat - Me.zip: it's over 100 MB, more than LinkVault can take at once. If it's a chat exported with media, export it again without media.",
+    );
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   test("a failure says what happened and stops the queue", async () => {
     const client = fakeClient();
     client.scan.mockRejectedValue(
@@ -258,6 +320,117 @@ describe("while importing", () => {
       "Couldn't find a chat in WhatsApp Chat - Me.zip: there's no .txt inside. Export the chat again and drop the new file.",
     );
     expect(client.scan).toHaveBeenCalledOnce();
+    // The same zip would fail the same way, so there's no Try again.
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  test("Try again picks up at the file that failed, keeping earlier results", async () => {
+    const client = fakeClient([
+      imported({ name: "First" }),
+      imported({ name: "Second" }),
+      imported({ name: "Third" }),
+    ]);
+    const start = client.start.getMockImplementation();
+    client.start.mockImplementationOnce(start!).mockImplementationOnce(() => {
+      throw new WorkerError("unexpected", "Transaction aborted");
+    });
+    renderImporter(client);
+    const files = [fileNamed("a.txt"), fileNamed("b.txt"), fileNamed("c.txt")];
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files, getData: () => "" },
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(
+      "Something went wrong importing b.txt, and nothing was saved.",
+    );
+    expect(alert.textContent).toContain("Transaction aborted");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Third")).toBeTruthy();
+    expect(screen.getByText("First")).toBeTruthy();
+    expect(screen.getByText("Second")).toBeTruthy();
+    expect(client.scan.mock.calls.map(([input]) => input)).toEqual(
+      [files[0], files[1], files[1], files[2]].map((file) => ({ file })),
+    );
+  });
+
+  test("a scan with questions waits for the dialog; skipping imports nothing", async () => {
+    const client = fakeClient();
+    client.scan.mockResolvedValue({
+      ...scanned,
+      fileName: "me.txt",
+      duplicateOf: {
+        sourceId: "s",
+        sourceName: "Me",
+        importedAt: at(2026, 8, 12),
+      },
+      questions: ["duplicate"],
+    });
+    renderImporter(client);
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [fileNamed("me.txt")], getData: () => "" },
+    });
+
+    await screen.findByRole("dialog", { name: "Before importing me.txt" });
+    fireEvent.click(screen.getByRole("button", { name: "Don't import" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Nothing was imported.",
+      ),
+    );
+    expect(client.start).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("the sample data", () => {
+  test("an empty library offers it, and it imports like a dropped export", async () => {
+    const client = fakeClient();
+    const sample = fileNamed("WhatsApp Chat with Sample chat.txt");
+    vi.mocked(loadSample).mockResolvedValue(sample);
+    render(<Importer connect={() => client} empty />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Try with sample data" }),
+    );
+
+    await screen.findByText("4,644 links found");
+    expect(client.scan).toHaveBeenCalledWith(
+      { file: sample },
+      expect.any(Function),
+    );
+  });
+
+  test("a library with sources doesn't offer it", () => {
+    renderImporter(fakeClient());
+    expect(
+      screen.queryByRole("button", { name: "Try with sample data" }),
+    ).toBeNull();
+  });
+
+  test("a sample that can't be loaded says so", async () => {
+    vi.mocked(loadSample).mockRejectedValue(new Error("offline"));
+    render(<Importer connect={() => fakeClient()} empty />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Try with sample data" }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Couldn't load the sample data. Reload the page and try again.",
+    );
+  });
+
+  test("when the button goes, focus goes to Choose files", () => {
+    const connect = () => fakeClient();
+    const { rerender } = render(<Importer connect={connect} empty />);
+    screen.getByRole("button", { name: "Try with sample data" }).focus();
+
+    rerender(<Importer connect={connect} empty={false} />);
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Choose files" }),
+    );
   });
 });
 

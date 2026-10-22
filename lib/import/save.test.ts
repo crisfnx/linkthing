@@ -180,14 +180,16 @@ describe("a new source", () => {
 });
 
 describe("cancelling", () => {
+  // Just over one chunk: fake-indexeddb undoes an aborted write by scanning
+  // each index once per row, so rolling back n links takes time in n².
   test.each([
     ["while extracting", (p: ImportProgress) => p.phase === "extracting"],
     ["before the first chunk", (p: ImportProgress) => p.done === 0],
     ["after the first chunk", (p: ImportProgress) => p.done === 1000],
-    ["with the last chunk", (p: ImportProgress) => p.done === 2500],
+    ["with the last chunk", (p: ImportProgress) => p.done === 1200],
   ])("%s leaves no rows at all", async (_, when) => {
     const db = freshDb();
-    const scan = await scanInput(db, { text: manyLinks(2500) });
+    const scan = await scanInput(db, { text: manyLinks(1200) });
     const controller = new AbortController();
     const saving = saveImport(
       db,

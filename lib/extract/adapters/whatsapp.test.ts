@@ -275,6 +275,12 @@ describe("other date and time formats", () => {
   test("ambiguous dates: the scan says so, and the option decides", () => {
     const text = "05/07/2022, 00:57 - Cris: a\n06/08/2022, 10:00 - Cris: b";
     expect(scanWhatsApp(text).dateOrder).toBeUndefined();
+    expect(scanWhatsApp(text).lastDate).toEqual({
+      written: "06/08/2022",
+      a: 6,
+      b: 8,
+      c: 2022,
+    });
     expect(first(text)?.timestamp).toBe(at(2022, 7, 5, 0, 57));
     expect(whatsapp.parse({ text }, { dateOrder: "MDY" })[0]?.timestamp).toBe(
       at(2022, 5, 7, 0, 57),

@@ -12,7 +12,7 @@ import type {
 // 오후, 下午), then " - " (Android) or "] " (iOS) and the rest.
 const PERIOD = String.raw`[\p{L}.](?:[\p{L}. ]{0,5}[\p{L}.])?`;
 const HEADER = new RegExp(
-  String.raw`^[\u{200E}\u{200F}]?\[?(?<a>\d{1,4})[./-] ?(?<b>\d{1,2})[./-] ?(?<c>\d{2,4})\.?,?\s+` +
+  String.raw`^[\u{200E}\u{200F}]?\[?(?<date>(?<a>\d{1,4})[./-] ?(?<b>\d{1,2})[./-] ?(?<c>\d{2,4}))\.?,?\s+` +
     String.raw`(?:(?<before>${PERIOD})\s?)?(?<hour>\d{1,2}):(?<minute>\d{2})(?::(?<second>\d{2}))?` +
     String.raw`(?:\s?(?<after>${PERIOD}))?(?:\] | - )(?<rest>.*)$`,
   "u",
@@ -45,6 +45,10 @@ export interface WhatsAppScan {
   dateOrder?: DateOrder;
   // Prefixes seen before ": " that are people, not system messages.
   senders: Set<string>;
+  // When the order is ambiguous: the last date as written ("11/06/2024"), so
+  // the dialog can show both readings. People know roughly when they
+  // exported, so the last date is the one that settles it.
+  lastDate?: { written: string; a: number; b: number; c: number };
 }
 
 // The scan pass (PRD §3, §6.1): needs every date in the file to infer the
@@ -54,10 +58,12 @@ export function scanWhatsApp(text: string): WhatsAppScan {
   let monthFirst = false;
   let yearFirst = false;
   const prefixes = new Map<string, number>();
+  let last: Header | undefined;
 
   for (const line of text.split("\n")) {
     const header: Header | undefined = HEADER.exec(line)?.groups;
     if (!header) continue;
+    last = header;
     const { a = "", b = "", rest = "" } = header;
     if (a.length === 4) yearFirst = true;
     else {
@@ -87,7 +93,12 @@ export function scanWhatsApp(text: string): WhatsAppScan {
     if (count >= 2 || !QUOTE.test(prefix)) senders.add(prefix);
   }
 
-  return { dateOrder, senders };
+  const scan: WhatsAppScan = { dateOrder, senders };
+  if (!dateOrder && last) {
+    const { date = "", a, b, c } = last;
+    scan.lastDate = { written: date, a: Number(a), b: Number(b), c: Number(c) };
+  }
+  return scan;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
