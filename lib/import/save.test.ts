@@ -74,7 +74,13 @@ describe("a new source", () => {
     const { sourceId } = imported;
     const expected = extractLinks(scan.text, sourceId, "whatsapp");
 
-    expect(imported).toEqual({ sourceId, stats: expected.stats, newLinks: 17 });
+    expect(imported).toEqual({
+      sourceId,
+      name: "Me",
+      updated: false,
+      stats: expected.stats,
+      newLinks: 17,
+    });
     const source = await db.sources.get(sourceId);
     expect(source).toEqual({
       id: sourceId,
@@ -243,7 +249,11 @@ describe("an update from a newer export", () => {
 
   test("adds the file as a new part and only the links that are new", async () => {
     const { db, sourceId, update } = await updated();
-    expect(update.newLinks).toBe(12); // 26 in the newer export, 14 stored
+    expect(update).toMatchObject({
+      name: "whatsapp-update-older.txt", // the source keeps its name
+      updated: true,
+      newLinks: 12, // 26 in the newer export, 14 stored
+    });
     expect(await rowCounts(db)).toEqual([1, 2, 29]);
     const parts = await db.sourceParts.where("sourceId").equals(sourceId);
     expect(await parts.count()).toBe(2);
