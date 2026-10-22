@@ -1,30 +1,89 @@
 import type { LinkVaultDb } from "@/lib/db/schema";
 import { InputError } from "@/lib/extract/input";
-import { scanInput } from "@/lib/import/scan";
-import type { WorkerRequest, WorkerResponse } from "./protocol";
+import type { ImportOptions } from "@/lib/import/options";
+import { saveImport } from "@/lib/import/save";
+import { scanInput, type Scan } from "@/lib/import/scan";
+import type {
+  WorkerErrorCode,
+  WorkerRequest,
+  WorkerResponse,
+} from "./protocol";
 
 export interface WorkerContext {
   db: LinkVaultDb;
+  post: (response: WorkerResponse) => void;
 }
 
-// Kept apart from extract.worker.ts so it can be tested without a Worker.
-export async function handleRequest(
-  request: WorkerRequest,
-  { db }: WorkerContext,
-): Promise<WorkerResponse> {
-  const { id } = request;
-  try {
+// IndexedDB reports a full disk as QuotaExceededError, and Dexie can wrap it
+// in the AbortError of the transaction it ended.
+function isQuotaError(error: unknown): boolean {
+  const inner = (error as { inner?: unknown } | null)?.inner;
+  return [error, inner].some(
+    (e) => e instanceof Error && e.name === "QuotaExceededError",
+  );
+}
+
+function errorCode(error: unknown, signal: AbortSignal): WorkerErrorCode {
+  if (signal.aborted) return "cancelled";
+  if (error instanceof InputError) return error.code;
+  if (isQuotaError(error)) return "quota-exceeded";
+  return "unexpected";
+}
+
+// The worker's side of the protocol, kept apart from extract.worker.ts so it
+// can be tested without a Worker.
+export function createHandler({ db, post }: WorkerContext) {
+  // The last scan's text waits here for the start that follows it.
+  let scanned: Scan | undefined;
+  let running: AbortController | undefined;
+
+  async function run(
+    id: number,
+    task: (options: ImportOptions) => Promise<WorkerResponse>,
+  ) {
+    const controller = new AbortController();
+    running = controller;
+    try {
+      post(
+        await task({
+          onProgress: (progress) => post({ id, type: "progress", progress }),
+          signal: controller.signal,
+        }),
+      );
+    } catch (error) {
+      const code = errorCode(error, controller.signal);
+      const message = error instanceof Error ? error.message : String(error);
+      post({ id, type: "error", code, message });
+    } finally {
+      if (running === controller) running = undefined;
+    }
+  }
+
+  return async function handle(request: WorkerRequest): Promise<void> {
+    const { id } = request;
     switch (request.type) {
       case "ping":
-        return { id, type: "pong" };
-      case "scan": {
-        const { result } = await scanInput(db, request.input);
-        return { id, type: "scanned", scan: result };
+        return post({ id, type: "pong" });
+      case "cancel":
+        running?.abort();
+        return;
+      case "scan":
+        scanned = undefined;
+        return run(id, async (options) => {
+          scanned = await scanInput(db, request.input, options);
+          return { id, type: "scanned", scan: scanned.result };
+        });
+      case "start": {
+        // Used once: trying again after a failure starts from a new scan,
+        // which also sees what the failed attempt changed.
+        const scan = scanned;
+        scanned = undefined;
+        return run(id, async (options) => {
+          if (!scan) throw new Error("There is no scanned input to import");
+          const imported = await saveImport(db, scan, request.choice, options);
+          return { id, type: "done", imported };
+        });
       }
     }
-  } catch (error) {
-    const code = error instanceof InputError ? error.code : "unexpected";
-    const message = error instanceof Error ? error.message : String(error);
-    return { id, type: "error", code, message };
-  }
+  };
 }

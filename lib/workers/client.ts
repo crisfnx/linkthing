@@ -1,3 +1,5 @@
+import type { ImportProgress } from "@/lib/import/options";
+import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import type {
   WorkerErrorCode,
@@ -23,15 +25,24 @@ export class WorkerError extends Error {
   }
 }
 
+type OnProgress = (progress: ImportProgress) => void;
+
 export interface ExtractClient {
   ping(): Promise<WorkerResponse>;
   // The scan pass (§6.1): what the file is, and whether the dialog must ask.
-  scan(input: ScanInput): Promise<ScanResult>;
+  scan(input: ScanInput, onProgress?: OnProgress): Promise<ScanResult>;
+  // The save pass, for the last scan. Rejects with "cancelled" on cancel.
+  start(choice?: ImportChoice, onProgress?: OnProgress): Promise<Imported>;
+  cancel(): void;
   terminate(): void;
 }
 
 // Omit<WorkerRequest, "id"> would collapse the union into its common fields.
 type Unsent<T> = T extends unknown ? Omit<T, "id"> : never;
+type Reply<T extends WorkerResponse["type"]> = Extract<
+  WorkerResponse,
+  { type: T }
+>;
 
 export function startExtractWorker(): Worker {
   return new Worker(new URL("./extract.worker.ts", import.meta.url), {
@@ -42,33 +53,56 @@ export function startExtractWorker(): Worker {
 export function createExtractClient(
   worker: WorkerPort = startExtractWorker(),
 ): ExtractClient {
+  interface Pending {
+    resolve: (response: WorkerResponse) => void;
+    onProgress?: OnProgress;
+  }
   let nextId = 0;
-  const pending = new Map<number, (response: WorkerResponse) => void>();
+  const pending = new Map<number, Pending>();
 
   worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
-    const resolve = pending.get(event.data.id);
-    pending.delete(event.data.id);
-    resolve?.(event.data);
+    const response = event.data;
+    const request = pending.get(response.id);
+    if (response.type === "progress") {
+      request?.onProgress?.(response.progress);
+      return;
+    }
+    pending.delete(response.id);
+    request?.resolve(response);
   });
 
-  function request(message: Unsent<WorkerRequest>) {
+  function send(message: Unsent<WorkerRequest>, waiting?: Pending) {
     const id = nextId++;
-    return new Promise<WorkerResponse>((resolve) => {
-      pending.set(id, resolve);
-      worker.postMessage({ ...message, id });
+    if (waiting) pending.set(id, waiting);
+    worker.postMessage({ ...message, id });
+  }
+
+  // Sends a request and waits for its reply of the given type.
+  async function call<T extends WorkerResponse["type"]>(
+    message: Unsent<WorkerRequest>,
+    type: T,
+    onProgress?: OnProgress,
+  ): Promise<Reply<T>> {
+    const response = await new Promise<WorkerResponse>((resolve) => {
+      send(message, { resolve, onProgress });
     });
+    if (response.type === type) return response as Reply<T>;
+    if (response.type === "error") {
+      throw new WorkerError(response.code, response.message);
+    }
+    throw new WorkerError("unexpected", `Expected ${type}: ${response.type}`);
   }
 
   return {
-    ping: () => request({ type: "ping" }),
-    async scan(input) {
-      const response = await request({ type: "scan", input });
-      if (response.type === "scanned") return response.scan;
-      if (response.type === "error") {
-        throw new WorkerError(response.code, response.message);
-      }
-      throw new WorkerError("unexpected", `Unexpected ${response.type}`);
+    ping: () => call({ type: "ping" }, "pong"),
+    async scan(input, onProgress) {
+      return (await call({ type: "scan", input }, "scanned", onProgress)).scan;
     },
+    async start(choice = {}, onProgress) {
+      const reply = await call({ type: "start", choice }, "done", onProgress);
+      return reply.imported;
+    },
+    cancel: () => send({ type: "cancel" }),
     terminate: () => worker.terminate(),
   };
 }
