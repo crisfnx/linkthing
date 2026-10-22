@@ -16,6 +16,16 @@ export function hash53(text: string): string {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
+// A file's identity (PRD §5): the SHA-256 of its decoded text, in hex, so the
+// same chat matches whether it arrives zipped or not. It runs once per file,
+// so crypto.subtle being async costs nothing here.
+export async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
 const SEPARATOR = "\x1f";
 
 // A chat message's identity across exports of the same chat (PRD §3): its
