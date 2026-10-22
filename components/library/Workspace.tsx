@@ -1,5 +1,6 @@
 "use client";
 
+import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { Importer } from "@/components/import/Importer";
 import { createDb } from "@/lib/db/schema";
@@ -16,6 +17,8 @@ export default function Workspace() {
   const [db] = useState(() =>
     createDb(undefined, () => setUpgradeNeeded(true)),
   );
+  // Undefined until the count is in, so the sample isn't offered by mistake.
+  const sources = useLiveQuery(() => db.sources.count(), [db]);
 
   return (
     <>
@@ -34,7 +37,7 @@ export default function Workspace() {
           </button>
         </div>
       )}
-      <Importer>
+      <Importer empty={sources === 0}>
         <SourceList db={db} />
       </Importer>
     </>

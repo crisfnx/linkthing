@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Dexie from "dexie";
 import { zipSync } from "fflate";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { InputError } from "@/lib/extract/input";
 import { sha256 } from "@/lib/extract/keys";
@@ -159,6 +159,25 @@ describe("what the scan reads", () => {
     const zip = zipSync({ "IMG-20230525-WA0001.jpg": new Uint8Array([0xff]) });
     const input = { file: new File([zip], "WhatsApp Chat - Me.zip") };
     await expect(scanInput(freshDb(), input)).rejects.toThrow(InputError);
+  });
+
+  test("a file over 100 MB is refused before it is read", async () => {
+    const file = new File(["https://example.com/a"], "WhatsApp Chat - Me.zip");
+    Object.defineProperty(file, "size", { value: 100_000_001 });
+    file.arrayBuffer = vi.fn(file.arrayBuffer);
+
+    await expect(scanInput(freshDb(), { file })).rejects.toMatchObject({
+      name: "InputError",
+      code: "too-large",
+    });
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  test("a file of exactly 100 MB is not", async () => {
+    const file = new File(["https://example.com/a"], "notes.txt");
+    Object.defineProperty(file, "size", { value: 100_000_000 });
+    const { result } = await scanInput(freshDb(), { file });
+    expect(result.detection.kind).toBe("plaintext");
   });
 });
 

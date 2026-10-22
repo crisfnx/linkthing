@@ -2,12 +2,19 @@
 // place so translating later is a mechanical change. Numbers and dates use
 // the browser's locale.
 import type { Source } from "@/lib/db/types";
+import { MAX_INPUT_BYTES } from "@/lib/import/limits";
 import type { ImportPhase } from "@/lib/import/options";
 import type { WorkerErrorCode } from "@/lib/workers/protocol";
 
 const number = new Intl.NumberFormat();
 const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 const longDay = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+const megabytes = new Intl.NumberFormat(undefined, {
+  style: "unit",
+  unit: "megabyte",
+  maximumFractionDigits: 0,
+});
+const mb = (bytes: number) => megabytes.format(bytes / 1_000_000);
 
 function count(n: number, one: string, many = `${one}s`): string {
   return `${number.format(n)} ${n === 1 ? one : many}`;
@@ -57,6 +64,9 @@ export const strings = {
   clipboardFailed:
     "Couldn't read the clipboard. Paste into the box above instead.",
   pastedText: "Pasted text",
+  trySample: "Try with sample data",
+  sampleHint: "A made-up group chat, to see what LinkVault does first",
+  sampleFailed: "Couldn't load the sample data. Reload the page and try again.",
 
   phases: PHASES,
   importing: (label: string, remaining: number) =>
@@ -65,6 +75,8 @@ export const strings = {
       : `Importing ${label} (${count(remaining, "more file")} after this)`,
   progressLabel: "Import progress",
   phaseStatus: (phase: ImportPhase) => `${PHASES[phase]}…`,
+  largeInput: (bytes: number) =>
+    `That's ${mb(bytes)}, so importing it may take a few minutes.`,
   cancel: "Cancel",
 
   summaryHeading: "Imported",
@@ -93,6 +105,8 @@ export const strings = {
       `Couldn't find a chat in ${label}: there's no .txt inside. Export the chat again and drop the new file.`,
     "unreadable-zip": (label: string) =>
       `Couldn't open ${label}: the zip file is damaged or incomplete. Download or export it again, then drop the new file.`,
+    "too-large": (label: string) =>
+      `Couldn't import ${label}: it's over ${mb(MAX_INPUT_BYTES)}, more than LinkVault can take at once. If it's a chat exported with media, export it again without media.`,
     "quota-exceeded": () =>
       "Your browser's storage for this site is full, so nothing was saved. Free up space and try again.",
     cancelled: () => CANCELLED,

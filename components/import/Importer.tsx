@@ -15,6 +15,7 @@ import { ImportSummary } from "./ImportSummary";
 
 interface Props {
   connect?: () => ExtractClient;
+  empty?: boolean; // the library has no sources: offer the sample data
   children?: ReactNode;
 }
 
@@ -41,7 +42,7 @@ function announcement(state: ImportState): string {
 
 // The first screen (M2): drop, pick or paste, watch the progress, read the
 // summary. Browsing the links arrives with M3.
-export function Importer({ connect, children }: Props) {
+export function Importer({ connect, empty = false, children }: Props) {
   // The question the dialog is asking, and where its answer goes.
   const [asking, setAsking] = useState<{
     scan: ScanResult;
@@ -59,20 +60,19 @@ export function Importer({ connect, children }: Props) {
   const running = state.status === "running";
   const results = "results" in state ? state.results : [];
 
-  // The Cancel button goes with the progress bar. If it had focus, put focus
-  // back on "Choose files" rather than leave the keyboard user nowhere.
+  // Cancel goes with the progress bar, and the sample button once the library
+  // has a source, in whichever order the two arrive. If either had focus, put
+  // it back on "Choose files" rather than leave the keyboard user nowhere.
   const chooseFiles = useRef<HTMLButtonElement>(null);
-  const wasRunning = useRef(false);
+  const before = useRef({ running, empty });
   useEffect(() => {
-    if (
-      wasRunning.current &&
-      !running &&
-      document.activeElement === document.body
-    ) {
+    const gone =
+      (before.current.running && !running) || (before.current.empty && !empty);
+    if (gone && document.activeElement === document.body) {
       chooseFiles.current?.focus();
     }
-    wasRunning.current = running;
-  }, [running]);
+    before.current = { running, empty };
+  }, [running, empty]);
 
   return (
     <DropZone disabled={running} onFiles={importFiles} onText={importText}>
@@ -86,6 +86,7 @@ export function Importer({ connect, children }: Props) {
         <ImportForm
           ref={chooseFiles}
           busy={running}
+          sample={empty}
           onFiles={importFiles}
           onText={importText}
         />
@@ -96,6 +97,7 @@ export function Importer({ connect, children }: Props) {
         {state.status === "running" && (
           <ImportProgress
             label={state.label}
+            size={state.size}
             progress={state.progress}
             remaining={state.remaining}
             onCancel={cancel}

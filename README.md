@@ -6,7 +6,7 @@ LinkVault (working name; the repo is `linkthing`) is a local-first web app for r
 
 Nothing leaves your browser. There's no account and no upload.
 
-> **Status: early development.** The extraction engine is built and tested on real exports. The first screens (importing a file) are next. Right now there's nothing to click beyond the Next.js starter page.
+> **Status: early development.** The extraction engine and the import screen are built: drop in a chat export or any text, or click **Try with sample data**, and see what was found. Browsing the links themselves (M3) is next. The UI is deliberately plain until a design system is chosen.
 
 ---
 
@@ -34,9 +34,16 @@ Chats and notes make good "save for later" bins and bad libraries. The links are
 - **Keeps context.** Each link keeps its sender, its time, the text around it, and, for a bare link, a note sent just before or after it.
 - **Merges newer exports.** Re-exporting the same chat later adds only the new links, even when WhatsApp's export limit has cut off the oldest messages.
 
+### Built: importing
+
+- **Every way in.** Drop files anywhere on the page, pick several at once, paste text or read the clipboard. Or try a made-up sample chat first.
+- **Asks only when it has to.** A file imported before, a newer export of a chat you have, a file that might or might not be a chat, or dates that read either way (`06/08/2022`: 6 August or 8 June?) open one short dialog. Everything else imports straight away.
+- **Progress you can cancel.** Each phase is shown and announced to screen readers. Cancelling, or closing the tab, leaves nothing half-saved: each import is one database transaction.
+- **A summary of what came out:** links, unique links, sites and dates, then the list of your sources.
+- **Big files are fine.** A 10 MB export takes three to five seconds (Safari is the quicker), and the page stays responsive throughout. Files up to 100 MB are accepted, with a note above 25 MB that it will take a while.
+
 ### Coming next: the app (MVP)
 
-- Drag-and-drop or paste import, with progress and cancel, saved in the browser
 - A library view with search, filters (site, kind, sender, source, date), sorting, a duplicates toggle and a details panel
 - Export to a JSON backup, CSV, Markdown or a plain list, plus restore from backup
 - Mobile layout, dark mode, keyboard navigation and accessibility
@@ -69,8 +76,8 @@ Extraction is pure TypeScript with no DOM or React (enforced by lint). It runs i
 |---|---|---|
 | M0 · Foundations | Tooling, CI, security headers, database schema, worker scaffold | ✅ Done |
 | M1 · Extraction engine | Everything under "Built" above | ✅ Done |
-| M2 · Import | The first screen: drop a file, see progress and a summary | Next |
-| M3 · Browse | The library: search, filters, details | |
+| M2 · Import | The first screen: drop a file, see progress and a summary | ✅ Done |
+| M3 · Browse | The library: search, filters, details | Next |
 | M4 · Persist & export | Manage sources, stars, exports, backups | |
 | M5 · Polish & ship | Mobile, dark mode, accessibility; deployed | |
 | Gate | Two weeks of real use before deciding what comes next | |
@@ -90,6 +97,8 @@ pnpm install
 pnpm dev        # http://localhost:3000
 ```
 
+Open the page and drop in a WhatsApp export (in WhatsApp: a chat's menu → Export chat → Without media), or click **Try with sample data**.
+
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Development server |
@@ -104,15 +113,20 @@ CI runs lint, typecheck, format check and tests on every push, and the build on 
 ## Project layout
 
 ```
-app/                Next.js App Router (the UI arrives from M2)
+app/                Next.js App Router: one page, rendered in the browser
+components/import/  The import screen: drop zone, form, progress, dialog, summary
+components/library/ The workspace and the source list (the library view arrives in M3)
+hooks/              useImport: the import queue, from scan to save
 lib/extract/        The extraction engine: pure TypeScript
   adapters/         Source formats: whatsapp, plaintext
   url/              Find, repair, decode, validate, clean, dedupe key, domain, kind
   input.ts          Unzip, decode, normalize
   pipeline.ts       Text in, links out
+lib/import/         Scan and save passes, size limits, the sample
 lib/db/             IndexedDB schema (Dexie)
 lib/workers/        The extraction worker and its typed client
 tests/fixtures/     Anonymized test inputs and the URL edge-case table
+public/             The sample chat (made up)
 docs/PRD.md         Product requirements: the full spec
 ```
 

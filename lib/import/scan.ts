@@ -2,6 +2,7 @@ import type { LinkVaultDb } from "@/lib/db/schema";
 import { detectAdapter, type Detection } from "@/lib/extract/adapters";
 import { scanWhatsApp } from "@/lib/extract/adapters/whatsapp";
 import {
+  InputError,
   prepareFile,
   preparePaste,
   type PreparedInput,
@@ -10,6 +11,7 @@ import { sha256 } from "@/lib/extract/keys";
 import { linkCounts, linkIdsFor, type LinkCount } from "@/lib/extract/pipeline";
 import type { DateOrder, SourceKind } from "@/lib/extract/types";
 import type { ExtractOptions } from "@/lib/extract/url/extract";
+import { inputSize, MAX_INPUT_BYTES } from "./limits";
 import { checkpoint, type ImportOptions } from "./options";
 
 export type ScanInput = { file: File } | { text: string };
@@ -70,9 +72,12 @@ export function likelyKind(detection: Detection): SourceKind {
   return offered?.kind ?? detection.kind;
 }
 
+// Too large is refused before reading, so a zip full of media isn't loaded
+// into memory only to be turned away.
 async function readInput(
   input: ScanInput,
 ): Promise<{ text: string } | { bytes: Uint8Array; name: string }> {
+  if (inputSize(input) > MAX_INPUT_BYTES) throw new InputError("too-large");
   if ("text" in input) return { text: input.text };
   const bytes = new Uint8Array(await input.file.arrayBuffer());
   return { bytes, name: input.file.name };

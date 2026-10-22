@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { inputSize } from "@/lib/import/limits";
 import type { ImportProgress } from "@/lib/import/options";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
@@ -15,6 +16,7 @@ export type ImportState =
   | {
       status: "running";
       label: string; // the file's name, or "Pasted text"
+      size: number; // in bytes, for the large-file note
       progress: ImportProgress;
       remaining: number; // files queued after this one
     }
@@ -84,6 +86,7 @@ export function useImport({
         setState({
           status: "running",
           label,
+          size: inputSize(input),
           progress,
           remaining: items.length - i - 1,
         });

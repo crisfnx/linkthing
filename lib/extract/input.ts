@@ -11,7 +11,9 @@ export interface PreparedInput {
 }
 
 export class InputError extends Error {
-  constructor(readonly code: "zip-without-chat" | "unreadable-zip") {
+  constructor(
+    readonly code: "zip-without-chat" | "unreadable-zip" | "too-large",
+  ) {
     super(code);
     this.name = "InputError";
   }
