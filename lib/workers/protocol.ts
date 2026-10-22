@@ -1,18 +1,20 @@
-// Messages between the UI and the extraction worker (PRD §8.2). Load arrives
-// with M3.
+// Messages between the UI and the extraction worker (PRD §8.2).
 import type { InputError } from "@/lib/extract/input";
 import type { ImportProgress } from "@/lib/import/options";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
+import type { LibraryRows } from "@/lib/library/rows";
 
 // One import at a time: start imports the last scan, and cancel stops
 // whichever of the two is running. Cancel gets no reply of its own; the
-// request it stops replies with the code "cancelled".
+// request it stops replies with the code "cancelled". Load reads the library
+// as rows (§5); it can run beside an import, and a cancel doesn't touch it.
 export type WorkerRequest =
   | { id: number; type: "ping" }
   | { id: number; type: "scan"; input: ScanInput }
   | { id: number; type: "start"; choice: ImportChoice }
-  | { id: number; type: "cancel" };
+  | { id: number; type: "cancel" }
+  | { id: number; type: "load" };
 
 // "unexpected" covers anything without its own message in the UI yet, such
 // as a database error.
@@ -24,4 +26,5 @@ export type WorkerResponse =
   | { id: number; type: "progress"; progress: ImportProgress }
   | { id: number; type: "scanned"; scan: ScanResult }
   | { id: number; type: "done"; imported: Imported }
+  | { id: number; type: "rows"; rows: LibraryRows }
   | { id: number; type: "error"; code: WorkerErrorCode; message: string };

@@ -141,6 +141,11 @@ export const strings = {
     skip: "Don't import",
   },
 
+  library: (links: number, unique: number, sites: number) =>
+    `${count(links, "link")} in your library: ${number.format(unique)} unique, from ${count(sites, "site")}.`,
+  libraryFailed: (message: string) =>
+    `Couldn't read your library (${message}). Reload the page to try again.`,
+
   sourcesHeading: "Your sources",
   sourceKind: (kind: Source["kind"]) => KINDS[kind],
   sourceLinks: (links: number) => count(links, "link"),

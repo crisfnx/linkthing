@@ -3,6 +3,7 @@ import { zipSync } from "fflate";
 import { afterEach, expect, test, vi } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import type { ImportProgress } from "@/lib/import/options";
+import { textAt, type LibraryRows } from "@/lib/library/rows";
 import { createExtractClient, WorkerError, type WorkerPort } from "./client";
 import { createHandler } from "./handle";
 import type { WorkerRequest } from "./protocol";
@@ -24,7 +25,9 @@ afterEach(async () => {
 });
 
 // Stands in for the real worker: messages arrive asynchronously both ways,
-// as with postMessage.
+// as with postMessage. Requests arrive as tasks, as in a real worker, so one
+// sent from inside an import's progress callback doesn't run inside that
+// import's Dexie transaction.
 function fakeWorker(db = freshDb()): WorkerPort {
   const target = new EventTarget();
   const handle = createHandler({
@@ -36,7 +39,7 @@ function fakeWorker(db = freshDb()): WorkerPort {
   });
   return {
     postMessage: (message: WorkerRequest) =>
-      queueMicrotask(() => void handle(message)),
+      setTimeout(() => void handle(message)),
     addEventListener: target.addEventListener.bind(target),
     terminate() {},
   } as WorkerPort;
@@ -115,6 +118,30 @@ test("cancel while saving rejects with 'cancelled' and leaves no rows", async ()
   expect(await db.sources.count()).toBe(0);
   expect(await db.sourceParts.count()).toBe(0);
   expect(await db.links.count()).toBe(0);
+});
+
+test("load reads the library as rows", async () => {
+  const client = createExtractClient(fakeWorker());
+  await client.scan({ text: "https://example.com/a\nhttps://example.com/b" });
+  await client.start();
+  const rows = await client.load();
+  expect(rows.count).toBe(2);
+  expect(textAt(rows.urls, 0)).toBe("example.com/a");
+});
+
+// Cancel stops the running import. A load isn't one, so it mustn't become
+// what a cancel stops.
+test("a load while an import is saving leaves Cancel to the import", async () => {
+  const client = createExtractClient(fakeWorker());
+  await client.scan({ text: manyLinks(1200) });
+  let loading: Promise<LibraryRows> | undefined;
+  const importing = client.start({}, (p) => {
+    if (p.done === 0) loading = client.load();
+    if (p.done === 1000) client.cancel();
+  });
+
+  await expect(importing).rejects.toMatchObject({ code: "cancelled" });
+  expect((await loading)?.count).toBe(0); // read after the rollback
 });
 
 test("a full disk is reported as such", async () => {

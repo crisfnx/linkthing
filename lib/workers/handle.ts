@@ -3,6 +3,7 @@ import { InputError } from "@/lib/extract/input";
 import type { ImportOptions } from "@/lib/import/options";
 import { saveImport } from "@/lib/import/save";
 import { scanInput, type Scan } from "@/lib/import/scan";
+import { loadRows, transferablesOf } from "@/lib/library/rows";
 import type {
   WorkerErrorCode,
   WorkerRequest,
@@ -11,7 +12,8 @@ import type {
 
 export interface WorkerContext {
   db: LinkVaultDb;
-  post: (response: WorkerResponse) => void;
+  // transfer: buffers to move to the page rather than copy (library rows)
+  post: (response: WorkerResponse, transfer?: Transferable[]) => void;
 }
 
 // IndexedDB reports a full disk as QuotaExceededError, and Dexie can wrap it
@@ -67,6 +69,16 @@ export function createHandler({ db, post }: WorkerContext) {
       case "cancel":
         running?.abort();
         return;
+      case "load":
+        // Not through run(): that would make the load what Cancel stops.
+        try {
+          const rows = await loadRows(db);
+          return post({ id, type: "rows", rows }, transferablesOf(rows));
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return post({ id, type: "error", code: "unexpected", message });
+        }
       case "scan":
         scanned = undefined;
         return run(id, async (options) => {

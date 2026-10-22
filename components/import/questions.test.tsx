@@ -33,6 +33,7 @@ function inProcessClient(db: LinkVaultDb) {
     ping: vi.fn(),
     cancel: vi.fn(),
     terminate: vi.fn(),
+    load: vi.fn(),
     scan: async (input: ScanInput) => (await scanInput(db, input)).result,
     start: vi.fn<ExtractClient["start"]>(async () => ({
       sourceId: "new",

@@ -74,6 +74,7 @@ function fakeClient(results: Imported[] = [imported()]) {
     ),
     cancel: vi.fn(),
     terminate: vi.fn(),
+    load: vi.fn(),
   } satisfies ExtractClient;
   return client;
 }
@@ -493,7 +494,8 @@ describe("the summary", () => {
   });
 });
 
-test("the worker is started on the first import and stopped with the page", async () => {
+// The worker belongs to the page (useExtractClient), which stops it.
+test("the worker isn't asked for until something is imported", async () => {
   const client = fakeClient();
   const connect = vi.fn(() => client);
   const { unmount } = render(<Importer connect={connect} />);
@@ -503,7 +505,7 @@ test("the worker is started on the first import and stopped with the page", asyn
     dataTransfer: { files: [fileNamed("me.txt")], getData: () => "" },
   });
   await screen.findByText("4,644 links found");
+  expect(connect).toHaveBeenCalled();
   unmount();
-  expect(connect).toHaveBeenCalledOnce();
-  expect(client.terminate).toHaveBeenCalledOnce();
+  expect(client.terminate).not.toHaveBeenCalled();
 });

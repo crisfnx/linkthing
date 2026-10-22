@@ -56,8 +56,18 @@ export interface Adapter {
   parse(input: AdapterInput, options?: AdapterOptions): Message[];
 }
 
-export type LinkKind =
-  "video" | "social" | "code" | "image" | "document" | "audio" | "other";
+// In this order wherever a kind travels as a number (library rows, §5).
+export const LINK_KINDS = [
+  "video",
+  "social",
+  "code",
+  "image",
+  "document",
+  "audio",
+  "other",
+] as const;
+
+export type LinkKind = (typeof LINK_KINDS)[number];
 
 export interface Link {
   // Stable hash of (sourceId, message key, occurrence) for chat sources, so

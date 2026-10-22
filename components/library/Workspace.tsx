@@ -3,8 +3,11 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { Importer } from "@/components/import/Importer";
+import { useExtractClient } from "@/hooks/useExtractClient";
+import { useLibrary } from "@/hooks/useLibrary";
 import { createDb } from "@/lib/db/schema";
 import { strings } from "@/lib/strings";
+import { LibrarySummary } from "./LibrarySummary";
 import { SourceList } from "./SourceList";
 
 // Everything that needs the browser: IndexedDB and the worker (§8.2). Loaded
@@ -19,6 +22,8 @@ export default function Workspace() {
   );
   // Undefined until the count is in, so the sample isn't offered by mistake.
   const sources = useLiveQuery(() => db.sources.count(), [db]);
+  const connect = useExtractClient();
+  const library = useLibrary(db, connect);
 
   return (
     <>
@@ -37,7 +42,8 @@ export default function Workspace() {
           </button>
         </div>
       )}
-      <Importer empty={sources === 0}>
+      <Importer connect={connect} empty={sources === 0}>
+        <LibrarySummary library={library} />
         <SourceList db={db} />
       </Importer>
     </>
