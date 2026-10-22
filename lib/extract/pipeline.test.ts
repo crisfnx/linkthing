@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { detectAdapter } from "./adapters";
 import { whatsapp } from "./adapters/whatsapp";
 import { prepareFile } from "./input";
-import { extractLinks, linkCounts, linkIdsFor } from "./pipeline";
+import { extractLinks, linkCounts, linkIdsFor, mergeExports } from "./pipeline";
 import { normalizeText } from "./text";
 
 const fixtureBytes = (name: string) =>
@@ -182,6 +182,23 @@ describe("a newer export of the same chat (§6.1)", () => {
       [...merged.values()].filter((l) => l.url.includes("reel/ZyXwVuTsRqP")),
     ).toHaveLength(1);
   });
+});
+
+test("mergeExports: each message once, from the older export, in time order", () => {
+  const older = whatsapp.parse({ text: fixture("whatsapp-update-older.txt") });
+  const newer = whatsapp.parse({ text: fixture("whatsapp-update-newer.txt") });
+  const merged = mergeExports([older, newer]);
+
+  const keys = merged.map((m) => m.key);
+  expect(new Set(keys).size).toBe(keys.length);
+  expect(new Set(keys)).toEqual(
+    new Set([...older, ...newer].map((m) => m.key)),
+  );
+  const olderKeys = new Set(older.map((m) => m.key));
+  const shared = merged.filter((m) => olderKeys.has(m.key));
+  expect(shared.every((m) => older.includes(m))).toBe(true);
+  const times = merged.map((m) => m.timestamp ?? 0);
+  expect(times).toEqual([...times].sort((a, b) => a - b));
 });
 
 // The import scan relies on this to compare a file with a stored chat.

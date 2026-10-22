@@ -92,6 +92,25 @@ export function linkIdsFor(sourceId: string, counts: LinkCount[]): string[] {
   );
 }
 
+// One chat's messages from several of its exports (§6.1): each message once,
+// by key, in time order. The earliest export that has a message supplies it,
+// so it matches the links already stored for it.
+export function mergeExports(exports: Message[][]): Message[] {
+  const seen = new Set<string>();
+  const merged: Message[] = [];
+  for (const message of exports.flat()) {
+    if (message.key !== undefined) {
+      if (seen.has(message.key)) continue;
+      seen.add(message.key);
+    }
+    merged.push(message);
+  }
+  // The sort is stable, so messages from the same minute keep their order.
+  // Undated text from before an export's first header goes first.
+  const time = (m: Message) => m.timestamp ?? Number.MIN_SAFE_INTEGER;
+  return merged.sort((a, b) => time(a) - time(b));
+}
+
 // detect → parse → extract → Link[] (PRD §4). Pure: the worker calls it and
 // writes the result in one transaction (§8.2).
 export function extractLinks(
@@ -100,8 +119,18 @@ export function extractLinks(
   kind: SourceKind,
   options: PipelineOptions = {},
 ): PipelineResult {
-  const rules = options.trackingParams ?? DEFAULT_TRACKING_PARAMS;
   const messages = adapterFor(kind).parse({ text }, options);
+  return linksFrom(messages, sourceId, options);
+}
+
+// Parsed messages → Link[] and stats. Split from extractLinks for the import,
+// which parses a chat's stored exports too and merges them first.
+export function linksFrom(
+  messages: Message[],
+  sourceId: string,
+  options: PipelineOptions = {},
+): PipelineResult {
+  const rules = options.trackingParams ?? DEFAULT_TRACKING_PARAMS;
   const notes: MessageNote[] = messages.map((message) => {
     const found = extractUrls(message.text, options);
     return { found, rest: textBesideLinks(message.text, found) };

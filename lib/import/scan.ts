@@ -10,6 +10,7 @@ import { sha256 } from "@/lib/extract/keys";
 import { linkCounts, linkIdsFor, type LinkCount } from "@/lib/extract/pipeline";
 import type { DateOrder, SourceKind } from "@/lib/extract/types";
 import type { ExtractOptions } from "@/lib/extract/url/extract";
+import { checkpoint, type ImportOptions } from "./options";
 
 export type ScanInput = { file: File } | { text: string };
 
@@ -52,7 +53,7 @@ export interface Scan {
 
 // Chat sources take a newer export as an update (§6.1). Telegram joins them in
 // Phase 1.5.
-const CHAT_KINDS: ReadonlySet<SourceKind> = new Set(["whatsapp"]);
+export const CHAT_KINDS: ReadonlySet<SourceKind> = new Set(["whatsapp"]);
 
 // A chat sharing at least this much of the smaller set of links is offered as
 // an update (§6.1). update-older and update-newer share 14 of 17.
@@ -64,6 +65,14 @@ function likelyKind(detection: Detection): SourceKind {
   if (!detection.needsConfirmation) return detection.kind;
   const offered = detection.scores.find((s) => s.kind !== "plaintext");
   return offered?.kind ?? detection.kind;
+}
+
+async function readInput(
+  input: ScanInput,
+): Promise<{ text: string } | { bytes: Uint8Array; name: string }> {
+  if ("text" in input) return { text: input.text };
+  const bytes = new Uint8Array(await input.file.arrayBuffer());
+  return { bytes, name: input.file.name };
 }
 
 // Size and hash of the text as UTF-8. Its own function, so a 100 MB copy of
@@ -152,15 +161,18 @@ function questionsFor(result: ScanResult): Question[] {
 export async function scanInput(
   db: LinkVaultDb,
   input: ScanInput,
-  options: ExtractOptions = {},
+  options: ImportOptions = {},
 ): Promise<Scan> {
+  const { onProgress, signal } = options;
+  onProgress?.({ phase: "reading" });
+  const read = await readInput(input);
+  await checkpoint(signal);
+
+  onProgress?.({ phase: "scanning" });
   const prepared =
-    "file" in input
-      ? prepareFile(
-          new Uint8Array(await input.file.arrayBuffer()),
-          input.file.name,
-        )
-      : preparePaste(input.text);
+    "bytes" in read
+      ? prepareFile(read.bytes, read.name)
+      : preparePaste(read.text);
   const { text } = prepared;
   const detection = detectAdapter({ text, fileName: prepared.fileName });
   const kind = likelyKind(detection);
@@ -181,6 +193,7 @@ export async function scanInput(
     else result.dateOrderAmbiguous = true;
   }
 
+  await checkpoint(signal);
   const duplicateOf = await findDuplicate(db, result.contentHash);
   if (duplicateOf) result.duplicateOf = duplicateOf;
   else if (CHAT_KINDS.has(kind)) {
