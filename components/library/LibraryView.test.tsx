@@ -1,5 +1,15 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import "fake-indexeddb/auto";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import Dexie from "dexie";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import type { Link } from "@/lib/extract/types";
 import { describeUrl } from "@/lib/extract/url/describe";
 import { RowsBuilder, type LibraryRows } from "@/lib/library/rows";
@@ -12,9 +22,22 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
 });
 
-afterEach(() => {
+const opened: LinkVaultDb[] = [];
+
+afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  for (const db of opened.splice(0)) {
+    db.close();
+    await Dexie.delete(db.name);
+  }
 });
+
+function freshDb(): LinkVaultDb {
+  const db = createDb(`test-${crypto.randomUUID()}`);
+  opened.push(db);
+  return db;
+}
 
 let next = 0;
 
@@ -32,9 +55,8 @@ function link(url: string, fields: Partial<Link> = {}): Link {
 
 const at = (y: number, m: number, d: number) => new Date(y, m - 1, d).getTime();
 
-function library(): LibraryRows {
-  const builder = new RowsBuilder(["notes", "chat"]);
-  [
+function links(): Link[] {
+  return [
     link("https://www.youtube.com/watch?v=Ex4mpLeV1d0", {
       sender: "Ana",
       timestamp: at(2026, 3, 9),
@@ -48,9 +70,16 @@ function library(): LibraryRows {
       timestamp: at(2025, 12, 24),
     }),
     link("https://example.com/guide/getting-started", { sourceId: "notes" }),
-  ].forEach((l) => builder.add(l));
+  ];
+}
+
+function rowsOf(all: Link[]): LibraryRows {
+  const builder = new RowsBuilder(["notes", "chat"]);
+  all.forEach((l) => builder.add(l));
   return builder.finish();
 }
+
+const library = () => rowsOf(links());
 
 const sourceNames = new Map([
   ["chat", "Chat with Me"],
@@ -62,11 +91,16 @@ const titles = () =>
     .getAllByRole("listitem")
     .map((li) => within(li).getByRole("link").textContent?.split(",")[0]);
 
-function renderView() {
-  render(<LibraryView rows={library()} sourceNames={sourceNames} />);
+// The list needs only the rows; the details drawer reads the stored link.
+function renderView(db = freshDb(), rows = library()) {
+  render(<LibraryView db={db} rows={rows} sourceNames={sourceNames} />);
   return {
     search: screen.getByRole("searchbox", { name: "Search links" }),
-    count: () => screen.getByRole("status").textContent,
+    count: () =>
+      screen
+        .getAllByRole("status")
+        .map((s) => s.textContent)
+        .find((t) => / links?, /.test(t ?? "")),
     sidebar: screen.getByRole("complementary", { name: "Filters" }),
   };
 }
@@ -196,4 +230,138 @@ test("on narrow screens the filters open in a dialog", () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.getByRole("button", { name: "Filters (1)" })).toBeTruthy();
+});
+
+describe("details", () => {
+  // A chat message around the link, and the note sent just after it.
+  const post = () =>
+    link("https://x.com/exampledev/status/42?s=20&t=AbCd", {
+      sender: "Ana",
+      timestamp: at(2026, 3, 14),
+      context:
+        "Best thing all week https://x.com/exampledev/status/42?s=20&t=AbCd",
+      nearby: "Saving this for the trip",
+      position: { line: 128, column: 20, messageIndex: 64 },
+    });
+
+  async function stored(...all: Link[]) {
+    const db = freshDb();
+    await db.links.bulkAdd(all);
+    renderView(db, rowsOf(all));
+    return db;
+  }
+
+  test("a click opens them: the cleaned URL, what was taken out, the message", async () => {
+    await stored(post());
+    fireEvent.click(screen.getByRole("link", { name: "Post by @exampledev" }));
+    const drawer = screen.getByRole("dialog", { name: "Post by @exampledev" });
+
+    expect(drawer.textContent).toContain("https://x.com/exampledev/status/42");
+    expect(
+      await within(drawer).findByText("Tracking taken out: s, t"),
+    ).toBeTruthy();
+    expect(drawer.textContent).toContain(
+      "As found: https://x.com/exampledev/status/42?s=20&t=AbCd",
+    );
+    expect(drawer.querySelector("mark")?.textContent).toBe(
+      "https://x.com/exampledev/status/42?s=20&t=AbCd",
+    );
+    expect(drawer.textContent).toContain("Saving this for the trip");
+    expect(drawer.textContent).toContain("Sent byAna");
+    expect(drawer.textContent).toContain("SourceChat with Me, line 128");
+    expect(drawer.textContent).toContain("Social post on twitter.com");
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("Open link opens the cleaned URL in a new tab, never with an opener", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await stored(post());
+    fireEvent.click(screen.getByRole("link", { name: "Post by @exampledev" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open link" }));
+    expect(open).toHaveBeenCalledWith(
+      "https://x.com/exampledev/status/42",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
+  test("c copies the cleaned URL and says so", async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    await stored(post());
+    const row = screen.getByRole("link", { name: "Post by @exampledev" });
+    row.focus();
+    fireEvent.keyDown(row, { key: "c" });
+    expect(writeText).toHaveBeenCalledWith(
+      "https://x.com/exampledev/status/42",
+    );
+    expect(await screen.findByText("Link copied.")).toBeTruthy();
+  });
+
+  test("a copy the browser refuses says so too", async () => {
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText: () => Promise.reject(new Error("denied")) },
+    });
+    await stored(post());
+    const row = screen.getByRole("link", { name: "Post by @exampledev" });
+    row.focus();
+    fireEvent.keyDown(row, { key: "c" });
+    expect(
+      await screen.findByText(
+        "Couldn't copy the link: the browser didn't allow it.",
+      ),
+    ).toBeTruthy();
+  });
+
+  test("the star, from the drawer and from the list, kept by urlKey", async () => {
+    const shared = post();
+    const db = await stored(shared);
+    fireEvent.click(screen.getByRole("link", { name: "Post by @exampledev" }));
+    const star = await screen.findByRole("button", { name: /Star/ });
+    await waitFor(() => expect(star.hasAttribute("disabled")).toBe(false));
+    expect(star.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(star);
+    await waitFor(() => expect(star.getAttribute("aria-pressed")).toBe("true"));
+    expect(await db.annotations.get(shared.urlKey)).toMatchObject({
+      starred: true,
+    });
+    // Inside the dialog: outside a modal dialog it would be inert, unheard.
+    expect(
+      within(screen.getByRole("dialog")).getByRole("status").textContent,
+    ).toBe("Starred.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const row = screen.getByRole("link", { name: "Post by @exampledev" });
+    row.focus();
+    await act(async () => {
+      fireEvent.keyDown(row, { key: "s" });
+    });
+    await waitFor(async () =>
+      expect(await db.annotations.get(shared.urlKey)).toBeUndefined(),
+    );
+    expect(await screen.findByText("Star removed.")).toBeTruthy();
+  });
+
+  test("a bare domain says it was found without https://", async () => {
+    await stored(
+      link("https://bbcgoodfood.com/recipes/custard-tarts", {
+        isBare: true,
+        context: "try bbcgoodfood.com/recipes/custard-tarts",
+      }),
+    );
+    fireEvent.click(screen.getByRole("link", { name: "Custard tarts" }));
+    const drawer = screen.getByRole("dialog");
+    expect(
+      await within(drawer).findByText(
+        "Found without https://, which was added.",
+      ),
+    ).toBeTruthy();
+    expect(drawer.querySelector("mark")?.textContent).toBe(
+      "bbcgoodfood.com/recipes/custard-tarts",
+    );
+  });
 });

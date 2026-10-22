@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 22 October 2026 (v2.19: M3 search, filters and sort; see Document history) |
+| **Updated** | 22 October 2026 (v2.20: M3 details drawer; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -392,7 +392,7 @@ db.version(1).stores({
   sources:         'id, importedAt',
   sourceParts:     'id, sourceId, contentHash',   // raw input, kept apart so live queries on sources stay small
   links:           'id, sourceId, urlKey',   // filtering is in memory (below); each extra index slows every import
-  annotations:     'urlKey, starred, *tags',
+  annotations:     'urlKey, starred, *tags',     // IndexedDB can't index booleans: starred: true stays out of the starred index, so a starred filter (M4) stores 1/0 or scans
   enrichments:     'urlKey, fetchedAt',
   tags:            'id, &slug',
   classifications: 'urlKey, promptVersion, *tagIds',
@@ -425,7 +425,7 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
 - **Compact view** (Phase 1.5): one URL per line, for eyeballing and select-all-copy.
 - **Card view** (M7, with link previews): a responsive grid of preview cards (image, title, domain, date). A card without a fetched preview shows a domain-tinted placeholder with the derived title; fetched previews fill it in (§6.8). It waits for M7 because before previews exist it is mostly placeholders.
 - **Duplicates toggle**: collapse duplicates by `urlKey`, show `×3` badge; expanding shows every occurrence with its own timestamp and context.
-- **Details drawer**: full URL, canonical URL with "what was stripped", context with the URL highlighted, nearby messages (§4.8), message metadata, source name and line number (or bookmark folder, from Phase 1.5), "Found without https://" for bare domains (§4.1), copy buttons, star; from M6 a tag editor with autocomplete, and from M8 AI suggestions (§6.9).
+- **Details drawer**: full URL, canonical URL with "what was stripped", context with the URL highlighted, nearby messages (§4.8), message metadata, source name and line number (or bookmark folder, from Phase 1.5), "Found without https://" for bare domains (§4.1), copy buttons, star; from M6 a tag editor with autocomplete, and from M8 AI suggestions (§6.9). As built in M3 (`DetailsDrawer`, `lib/library/details.ts`): a plain click or Enter on a row opens it; the row's title stays a real link, so ⌘/Ctrl-click, middle-click and the browser's own "copy link" still open or copy the page. It is the browser's `<dialog>` on the right (full width on a phone): focus starts on Close, stays inside, Esc or a click beside it closes it and focus goes back to the row. The row's own data shows at once and the full link, read by id, fills in the rest: the cleaned URL, "Tracking taken out: utm_source, si" (parameters in the URL as found but not in the cleaned one, and sign-in details), the URL as found when it differs, notes for bare domains and short links, the message with the link marked (it may be cut off by the 200-character context, and then shows unmarked), nearby messages, sender, date and time, source and line, kind; a Tier 0 card ("Video on youtube.com") holds the place of M7's preview. Open link opens the cleaned URL in a new tab with `noopener,noreferrer`; Copy link copies the cleaned URL; the star is an `Annotation` by `urlKey`, so every copy of the link shares it, and unstarring a link with nothing else on it removes the row. Each says what it did in a short notice, shown inside the dialog while it's open, since everything outside a modal dialog is inert.
 
 ### 6.3 Search, filter, sort
 
@@ -568,7 +568,7 @@ Per link, "Suggest tags" in the drawer runs the tagging pass for that one link.
 - **Library (M3)**: once the library has links, the list takes the page: a header with the name and an **Import** button that opens the same form in a dialog (choosing files or importing text closes it; dropping anywhere still works), the progress, errors and last import's summary above the list with **Dismiss**, a one-line count, then the list. Neither screen shows until the sources table has been read, so neither flashes up by mistake.
 - **Preview block and card view** (§6.8): the drawer's preview block and, from M8, the Organize wizard are the only places where a network action is offered, and each says what will be sent before it is sent.
 - **Mobile**: single column; facets in a bottom sheet; details as a full-screen sheet; sticky search.
-- **Keyboard**: `/` focus search (M3; not while typing in a field), `j`/`k` move, `o` or Enter open, `c` copy, `s` star, `t` tag, `Esc` close drawer. ⌘K command palette is a nice-to-have.
+- **Keyboard**: `/` focus search (M3; not while typing in a field), `j`/`k` move, Enter open the details, `o` open the link, `c` copy, `s` star (M3: on the focused row and in the drawer), `t` tag, `Esc` close drawer. ⌘K command palette is a nice-to-have.
 - **Dark mode**: follows system, manual override in settings; Tailwind v4 `@theme` tokens, already partially wired in `app/globals.css`.
 - **Accessibility**: WCAG 2.1 AA. Progress announced via `aria-live`; controls that can't be used during an import are `aria-disabled`, not `disabled`, so the focused one keeps focus, and focus returns to "Choose files" when the element holding it goes away (the Cancel button); drawer is a proper dialog with focus trap; lists are keyboard navigable; visible focus rings; no colour-only meaning.
 - **Copy**: plain, honest, no marketing voice. Errors say what happened and what to do ("Couldn't find a chat in `WhatsApp Chat - Me.zip`: there's no `.txt` inside. Export the chat again and drop the new file").
@@ -639,7 +639,7 @@ components/
   ui/                        shadcn-style primitives
   import/                    Importer (the import flow, on the first screen or above the list), DropZone (the whole page), ImportForm (file picker,
                              paste box, clipboard, sample), ImportPanel (the form behind Import), ImportProgress, ImportSummary, ImportDialog
-  library/                   WorkspaceLoader (client; loads Workspace with ssr:false), Workspace, LibraryView (search, sort, duplicates, filters around the list), FacetPanel, LinkList (with its rows), KindIcon, Toolbar, SearchBox, FacetSidebar,
+  library/                   WorkspaceLoader (client; loads Workspace with ssr:false), Workspace, LibraryView (search, sort, duplicates, filters around the list), FacetPanel, LinkList (with its rows), KindIcon, DetailsDrawer, Toolbar, SearchBox, FacetSidebar,
                              DomainGroups, CompactList, CardGrid, PreviewCard, DetailsDrawer, StatsPanel, EmptyState
   export/                    ExportDialog
   settings/                  SettingsDialog
@@ -667,6 +667,7 @@ lib/
     schema.ts                Dexie instance + versions
     raw.ts                   gzip and gunzip of SourcePart.raw (CompressionStream)
   library/rows.ts            lean rows as columns: built in the worker, read on the page (§5)
+  library/details.ts         what cleaning removed, the link marked in its message, the star (drawer)
   strings.ts                 every string the UI shows (§10)
   locale.ts                  what the browser's language implies (day/month order), until Settings (M4)
     repos/                   sources.ts (+ parts, chat updates), links.ts, annotations.ts, settings.ts (+ meta)
@@ -1192,3 +1193,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 22 Oct 2026 | v2.17: M3 lean rows (`lib/library/rows.ts`): rows carry a display title and URL, a dedupe key and folded search text, arrive newest first, and travel as columns (one string per text field, typed arrays transferred) rather than an object per link, a tenth of the clone cost; read in pages inside one transaction; reloaded when the sources change; Tier 0 titles with rules for the sites shared most (§5, §6.8); `load` beside an import, outside Cancel, on the page's one worker (§8.2); load times (§8.6) |
 | 22 Oct 2026 | v2.18: M3 list view (`LinkList`, `@tanstack/react-virtual`): fixed 60 px rows with a site badge, title or URL, kind, URL, sender and source when there's more than one, and date; one tab stop with j/k, arrows, Home/End and Page keys (§6.2); once the library has links the list takes the page and import moves behind a header button, with Dismiss for what an import leaves (§7); the React Compiler check (§8.1); scrolling measured, and the element height limit noted (§8.6, §15); rows carry the canonical URL and the page formats only what it shows (§5); SourceList removed, the Sources facet replaces it (m3-search) |
 | 22 Oct 2026 | v2.19: M3 search, filters and sort (`lib/query/view.ts`, `LibraryView`, `FacetPanel`): every word must match, deferred rather than debounced; facets with counts that leave out their own selection, "No sender" and "No date" values; five sorts with undated links last; collapsed duplicates with ×N that opens the copies (§6.3); search names cover every Appendix B mirror (§5); `/` to search (§7); timings (§8.6) |
+| 22 Oct 2026 | v2.20: M3 details drawer (`DetailsDrawer`, `lib/library/details.ts`): opened by a plain click or Enter, the title still a real link for ⌘-click; what cleaning took out, the URL as found, the message with the link marked, nearby, sender, date, source and line, a Tier 0 card in the preview's place; Open link (cleaned, `noopener`), Copy link, and the star by `urlKey`, with `o`, `c` and `s` from the drawer or the focused row (§6.2, §7); notices inside the open dialog; the boolean `starred` index noted for M4 (§5) |

@@ -1,7 +1,10 @@
 "use client";
 
 import { useDeferredValue, useEffect, useId, useRef, useState } from "react";
-import type { LibraryRows } from "@/lib/library/rows";
+import type { LinkVaultDb } from "@/lib/db/schema";
+import type { Link } from "@/lib/extract/types";
+import { toggleStar } from "@/lib/library/details";
+import { textAt, type LibraryRows } from "@/lib/library/rows";
 import {
   buildView,
   EMPTY_QUERY,
@@ -10,10 +13,12 @@ import {
   type Sort,
 } from "@/lib/query/view";
 import { strings } from "@/lib/strings";
+import { DetailsDrawer } from "./DetailsDrawer";
 import { FacetPanel } from "./FacetPanel";
 import { LinkList } from "./LinkList";
 
 interface Props {
+  db: LinkVaultDb; // the page's connection: full links by id, and stars
   rows: LibraryRows;
   sourceNames: ReadonlyMap<string, string>;
 }
@@ -33,7 +38,7 @@ function isTyping(target: EventTarget | null): boolean {
 // Search, sort, duplicates and filters over the list (§6.3). The search text
 // is deferred: the box takes every keystroke at once and the list follows as
 // soon as it can, which at 50 k links is the next frame or two (§8.6).
-export function LibraryView({ rows, sourceNames }: Props) {
+export function LibraryView({ db, rows, sourceNames }: Props) {
   const [query, setQuery] = useState<Query>(EMPTY_QUERY);
   const text = useDeferredValue(query.text);
   // Opened groups of copies, for these rows; a new read starts closed.
@@ -43,6 +48,16 @@ export function LibraryView({ rows, sourceNames }: Props) {
   }>({ rows, keys: new Set() });
   const openKeys = open.rows === rows ? open.keys : new Set<number>();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // The link whose details are open, kept with the rows it belongs to.
+  const [details, setDetails] = useState<{
+    rows: LibraryRows;
+    row: number;
+  } | null>(null);
+  const detailsRow = details?.rows === rows ? details.row : null;
+  // "Link copied." and the like, said for a moment, then gone.
+  const [notice, setNotice] = useState<{ text: string; at: number } | null>(
+    null,
+  );
   const search = useRef<HTMLInputElement>(null);
   const filtersDialog = useRef<HTMLDialogElement>(null);
   const filtersTitle = useId();
@@ -57,6 +72,47 @@ export function LibraryView({ rows, sourceNames }: Props) {
   const narrowed = chosen > 0 || text.trim() !== "";
   // A new search, filter or sort starts the list at the top.
   const listKey = JSON.stringify({ ...query, text });
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 2500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const say = (text: string) => setNotice({ text, at: Date.now() });
+  const said = notice && (
+    <p
+      key={notice.at}
+      role="status"
+      className="fixed bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-sm text-background"
+    >
+      {notice.text}
+    </p>
+  );
+
+  // The canonical URL: cleaned of tracking, so that is what's opened and
+  // copied (§4.4). noopener: the page opened can't reach back into this one.
+  function openLink(row: number) {
+    window.open(textAt(rows.urls, row), "_blank", "noopener,noreferrer");
+  }
+
+  function copy(row: number) {
+    navigator.clipboard.writeText(textAt(rows.urls, row)).then(
+      () => say(strings.copied),
+      () => say(strings.copyFailed),
+    );
+  }
+
+  async function star(link: Link) {
+    const starred = await toggleStar(db, link);
+    say(starred ? strings.starredNotice : strings.unstarredNotice);
+  }
+
+  // From the list, which has the row but not the link's urlKey.
+  async function starRow(row: number) {
+    const link = await db.links.get(textAt(rows.ids, row));
+    if (link) await star(link);
+  }
 
   // "/" goes to the search box (§7, Keyboard).
   useEffect(() => {
@@ -165,6 +221,10 @@ export function LibraryView({ rows, sourceNames }: Props) {
                 setOpen({ rows, keys });
               }}
               sourceNames={sourceNames}
+              onOpen={(row) => setDetails({ rows, row })}
+              onOpenLink={openLink}
+              onCopy={copy}
+              onStar={(row) => void starRow(row)}
             />
           ) : (
             <div className="flex flex-col items-start gap-3 p-4">
@@ -188,6 +248,22 @@ export function LibraryView({ rows, sourceNames }: Props) {
           )}
         </div>
       </div>
+
+      {detailsRow !== null && (
+        <DetailsDrawer
+          key={detailsRow}
+          db={db}
+          rows={rows}
+          row={detailsRow}
+          sourceNames={sourceNames}
+          onClose={() => setDetails(null)}
+          onOpenLink={openLink}
+          onCopy={copy}
+          onStar={(link) => void star(link)}
+          notice={said}
+        />
+      )}
+      {detailsRow === null && said}
 
       {filtersOpen && (
         <dialog
