@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { detectAdapter } from "./adapters";
 import { whatsapp } from "./adapters/whatsapp";
 import { prepareFile } from "./input";
-import { extractLinks } from "./pipeline";
+import { extractLinks, linkCounts, linkIdsFor } from "./pipeline";
 import { normalizeText } from "./text";
 
 const fixtureBytes = (name: string) =>
@@ -182,6 +182,19 @@ describe("a newer export of the same chat (§6.1)", () => {
       [...merged.values()].filter((l) => l.url.includes("reel/ZyXwVuTsRqP")),
     ).toHaveLength(1);
   });
+});
+
+// The import scan relies on this to compare a file with a stored chat.
+test.each([
+  "whatsapp-android-gb.txt",
+  "whatsapp-group-gb.txt",
+  "whatsapp-update-newer.txt",
+  "plaintext.txt",
+])("linkCounts and linkIdsFor give the ids extractLinks gives: %s", (name) => {
+  const text = fixture(name);
+  const { kind } = detectAdapter({ text });
+  const ids = extractLinks(text, "source-1", kind).links.map((l) => l.id);
+  expect(linkIdsFor("source-1", linkCounts(text, kind))).toEqual(ids);
 });
 
 // A synthetic export shaped like a real one: mostly bare links, some notes,

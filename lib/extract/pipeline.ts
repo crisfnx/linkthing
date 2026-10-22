@@ -63,6 +63,35 @@ function statsOf(messages: Message[], links: Link[]): SourceStats {
   return stats;
 }
 
+export interface LinkCount {
+  message: Pick<Message, "key" | "index">;
+  count: number;
+}
+
+// How many links each message holds: enough for the ids extractLinks would
+// give them, without describing a single URL. The import scan compares those
+// ids with a stored chat's to spot a newer export of it (§6.1).
+export function linkCounts(
+  text: string,
+  kind: SourceKind,
+  options: PipelineOptions = {},
+): LinkCount[] {
+  const counts: LinkCount[] = [];
+  for (const message of adapterFor(kind).parse({ text }, options)) {
+    const count = extractUrls(message.text, options).length;
+    if (count > 0) counts.push({ message, count });
+  }
+  return counts;
+}
+
+export function linkIdsFor(sourceId: string, counts: LinkCount[]): string[] {
+  return counts.flatMap(({ message, count }) =>
+    Array.from({ length: count }, (_, occurrence) =>
+      linkId(sourceId, message, occurrence),
+    ),
+  );
+}
+
 // detect → parse → extract → Link[] (PRD §4). Pure: the worker calls it and
 // writes the result in one transaction (§8.2).
 export function extractLinks(

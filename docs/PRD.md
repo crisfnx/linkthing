@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 22 October 2026 (v2.11: M1 complete; see Document history) |
+| **Updated** | 22 October 2026 (v2.12: M2 scan pass; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -410,11 +410,11 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
 
 - Drop zone (whole page accepts drops), file picker (multi-file), paste area, and a "Paste from clipboard" button.
 - Accepts `.txt`, `.zip` (WhatsApp exports, unzipped in the worker, §3), `.md`, `.markdown`, `.html`, `.htm`, and any `text/*`; unknown extensions are tried as plain text. Until the Phase 1.5 adapters land, Markdown and HTML (bookmark exports included) go through plain text, which still finds every URL but not link titles or bookmark folders. Files up to 100 MB; warn above 25 MB.
-- Two passes in the worker. **Scan** (fast, whole file): unzip if needed, decode, hash, detect the adapter, and for WhatsApp collect every date token, the sender set (§3) and the keys of messages that contain URLs. **Parse**: parse, extract, save.
-- Import dialog, shown between the passes only when the scan needs a decision: a low detection score, an ambiguous day/month order, a file already imported, or a likely update of an existing chat (below). Otherwise the parse starts straight away; a wrong guess is fixed afterwards with re-extract (§6.4), since the raw input is kept. Every occurrence is stored; duplicates are collapsed in the view (§6.2), not at import.
+- Two passes in the worker. **Scan** (fast, whole file; `lib/import/scan.ts`): unzip if needed, decode, hash the decoded text, detect the adapter, for WhatsApp collect every date token and the sender set (§3), and look for a stored part with the same hash and a stored chat it updates (below). **Parse**: parse, extract, save. On a 10 MB export the hash takes about 10 ms and the update check about 350 ms per day/month order among the stored chats, against about 700 ms for the extraction itself.
+- Import dialog, shown between the passes only when the scan needs a decision: a low detection score, an ambiguous day/month order, a file already imported, or a likely update of an existing chat (below). The scan reports these as a list of questions (`adapter`, `date-order`, `duplicate`, `update`). When detection is unsure, the scan answers as if the import used the adapter the dialog offers, so a chat it isn't sure of still gets its dates checked and can still be offered as an update. Otherwise the parse starts straight away; a wrong guess is fixed afterwards with re-extract (§6.4), since the raw input is kept. Every occurrence is stored; duplicates are collapsed in the view (§6.2), not at import.
 - Progress bar with phase labels (Reading → Scanning → Parsing → Extracting → Saving) and cancel. Cancelling, closing the tab or running out of quota leaves no partial source (§8.2).
-- Duplicate-file detection by content hash against every stored part, reported by the scan: "You imported this file on 12 Aug. Re-import anyway?"
-- **Updating a chat.** People re-export the same chat every few months, and a newer export of a long chat can lack its oldest messages (WhatsApp's export limit, §3). So a new export merges into the existing source instead of becoming a second source or replacing the first. The scan compares its message keys with the `messageKey`s stored on each chat source of the same adapter (computed with that source's day/month order); a source that shares at least half of the smaller set (tune with the update fixtures) is offered: "This looks like a newer export of 'Chat with Me'. Add the new messages to it?", with **Import as a new source** as the alternative. The update adds the file as a new part, keeps the source's day/month order, adds only links whose ids are new (§5) and refreshes the stats. For other sources, the same prompt appears when the file name matches an existing source and offers **Replace**; annotations survive it, since they are keyed by `urlKey`.
+- Duplicate-file detection by content hash against every stored part, reported by the scan: "You imported this file on 12 Aug. Re-import anyway?" The date is that of the latest import. The hash is of the decoded, normalized text, so a chat matches whether it arrives zipped, unzipped, with CRLF line endings or pasted. A file imported before is not also offered as an update, which would add nothing.
+- **Updating a chat.** People re-export the same chat every few months, and a newer export of a long chat can lack its oldest messages (WhatsApp's export limit, §3). So a new export merges into the existing source instead of becoming a second source or replacing the first. For each chat source of the same adapter, the scan computes the ids its links would get in that source (§5), keyed with that source's day/month order, and compares them with the link ids stored there. Ids come from the links table's `sourceId` index alone, whereas comparing `messageKey`s would mean reading every stored link on every import. A source that shares at least half of the smaller set of links (14 of 17 for the update fixtures) is offered: "This looks like a newer export of 'Chat with Me'. Add the new messages to it?", with **Import as a new source** as the alternative. The update adds the file as a new part, keeps the source's day/month order, adds only links whose ids are new (§5) and refreshes the stats. For other sources, the same prompt appears when the file name matches an existing source and offers **Replace**; annotations survive it, since they are keyed by `urlKey`.
 - Result summary: links found (new links, for an update), unique, domains, date range, non-web URLs skipped.
 - A "Try with sample data" button on the empty state, using a bundled anonymized WhatsApp fixture.
 
@@ -605,7 +605,7 @@ Not used, on purpose: a global state library (React state + Dexie live queries a
 ### 8.2 Runtime architecture
 
 - `app/page.tsx` is a Server Component shell (metadata, layout) and stays statically prerendered. It renders `components/library/WorkspaceLoader.tsx`, a small `'use client'` component that loads the workspace with `next/dynamic(() => import('./Workspace'), { ssr: false })`. Next.js 16 rejects `ssr: false` inside a Server Component, hence the loader. The workspace depends on IndexedDB and a worker, so it never renders on the server.
-- Extraction runs in a **module Web Worker** created with `new Worker(new URL('./extract.worker.ts', import.meta.url))`. Messages: `{ type: 'scan', file | text }` → `{ type: 'scanned', detection, dateOrder, dateOrderAmbiguous, contentHash, duplicateOf?, updateCandidate? }`; then `{ type: 'start', adapter, options, updateOf? }`, `{ type: 'progress', phase, done, total }`, `{ type: 'done', sourceId, stats }`, `{ type: 'error' }`, `{ type: 'cancel' }`. Library reads: `{ type: 'load' }` → `{ type: 'rows', rows }` (§5). The worker writes to Dexie directly, so large results never cross the thread boundary.
+- Extraction runs in a **module Web Worker** created with `new Worker(new URL('./extract.worker.ts', import.meta.url))`. Messages: `{ type: 'scan', input: { file } | { text } }` (the `File` itself, read in the worker) → `{ type: 'scanned', scan: { detection, dateOrder?, dateOrderAmbiguous, contentHash, byteSize, encoding, fileName?, chatName?, duplicateOf?, updateCandidate?, questions } }`; the worker keeps the decoded text for the parse; then `{ type: 'start', adapter, options, updateOf? }`, `{ type: 'progress', phase, done, total }`, `{ type: 'done', sourceId, stats }`, `{ type: 'error', code, message }`, `{ type: 'cancel' }`. Library reads: `{ type: 'load' }` → `{ type: 'rows', rows }` (§5). The worker writes to Dexie directly, so large results never cross the thread boundary.
 - **Imports are atomic.** The worker parses and extracts the whole input in memory first, then writes the source, its part and its links in one Dexie `rw` transaction, in chunks of 1 000 links with a progress message after each. IndexedDB commits all of it or none: cancelling calls `transaction.abort()`, and a closed or crashed tab or a quota error rolls back on its own. No source is ever half-written, so there is no `importing` status, no lock and no cleanup on startup. On failure the dialog shows the error with **Try again**, since the file is still at hand. An update (§6.1) works the same way: one transaction adds the new part, puts the links (ids are stable, so links already stored are rewritten unchanged) and refreshes the stats; a re-extract deletes and rewrites the source's links in one transaction. Check the 100 MB case on Safari in M2; if one transaction is too slow there, fall back to batched writes under a pending source.
 - The UI gets lean rows from the worker on load and after each `done` (§5, querying strategy). Small tables use `useLiveQuery`; the links table does not.
 - Dexie `versionchange`: when another tab opens a newer schema version, this tab closes its connection and asks the user to reload, so the upgrade isn't blocked.
@@ -643,14 +643,19 @@ components/
   organize/                  OrganizeWizard, CategoryProposal, ReviewQueue, TagManager, TagEditor
 lib/
   extract/                   PURE: no React, no DOM. Runs in worker and in Vitest (node env)
-    adapters/                plaintext.ts, whatsapp.ts, zip.ts, markdown.ts / netscape.ts / html.ts (Phase 1.5), index.ts (registry + detect + scan)
+    adapters/                plaintext.ts, whatsapp.ts (+ its scan: date order, sender set), markdown.ts / netscape.ts / html.ts (Phase 1.5),
+                             index.ts (registry + detect); zip is handled in input.ts
     url/                     find.ts, repair.ts, validate.ts, unescape.ts (JSON and HTML escapes), extract.ts (find → repair → decode → validate), canonicalize.ts, key.ts (urlKey + mirrors), domain.ts, classify.ts, shorteners.ts
     input.ts                 unzip (fflate; _chat.txt first, media and __MACOSX skipped), decode, normalize, chat name from the file name
     text.ts                  decode file bytes (UTF-8, windows-1252 fallback) and normalize (§9)
     context.ts               context and nearby (§4.8)
-    keys.ts                  message keys and link ids (§3, §5)
-    pipeline.ts              parse → extract → describe → context and nearby → Link[] with stable ids, and the source's stats
+    keys.ts                  message keys, link ids and the content hash (§3, §5)
+    pipeline.ts              parse → extract → describe → context and nearby → Link[] with stable ids, and the source's stats;
+                             link ids alone (linkCounts / linkIdsFor), for the update check
     types.ts
+  import/                    the import flow between the engine and the database; runs in the worker
+    scan.ts                  the scan pass: prepare, hash, detect, date order, duplicate and update checks (§6.1)
+    save.ts                  the save pass: one transaction, chunked progress, cancel, chat updates (§8.2)
   db/
     types.ts                 persisted records (§5); Link and Message stay in extract/types.ts
     schema.ts                Dexie instance + versions
@@ -673,7 +678,8 @@ hooks/
 tests/
   fixtures/                  whatsapp-android-gb.txt, whatsapp-group-gb.txt, whatsapp-android-us.txt, whatsapp-ios.txt, whatsapp-ios.zip,
                              whatsapp-de.txt, whatsapp-update-older.txt + whatsapp-update-newer.txt (overlapping exports),
-                             plaintext.txt, urls-edge-cases.txt; markdown.md and bookmarks.html in Phase 1.5
+                             whatsapp-ambiguous-dates.txt and whatsapp-unsure.txt (synthetic: the dialog's date-order and
+                             adapter questions), plaintext.txt, urls-edge-cases.txt; markdown.md and bookmarks.html in Phase 1.5
   e2e/                       import-search-export.spec.ts
   eval/                      tags-labeled.json (≈150 hand-tagged links, anonymized), recorded model responses
 docs/
@@ -1161,3 +1167,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 21 Oct 2026 | v2.9: bare domains found by default (owner's choice): public-suffix check, ambiguous endings need a path, `Link.isBare` with a drawer label and `is:bare`, `Settings.findBareDomains` to turn it off (§4.1, §5, §6, §9, §11, §14, Appendix B) |
 | 21 Oct 2026 | v2.10: WhatsApp adapter rules from the owner's group export (§3): one-time senders keep their name unless quoted; iPhone system messages under the chat's name; edit marker stripped; day-period list; message keys from the wall-clock minute (cyrb53); text before the first header kept; new edge cases in §9 |
 | 22 Oct 2026 | v2.11: M1 complete. Pipeline from bytes to links (`input.ts`, `pipeline.ts`): zip handling, chat name from the file name, context and nearby rules spelled out, column semantics, stats from link timestamps; nearby measured on the owner's exports (2 % of bare links in the chat with yourself, so M7 previews carry the meaning); extraction timings in §8.6 |
+| 22 Oct 2026 | v2.12: M2 scan pass (`lib/import/scan.ts`). Updates are matched by link ids, read from the `sourceId` index, rather than by stored message keys, which would mean reading every link (§6.1); the scan returns its questions as a list and answers for the adapter the dialog offers when detection is unsure; a duplicate file is not also offered as an update; scan protocol and errors (§8.2); `lib/import/` in the file structure, two synthetic fixtures for the dialog's questions (§8.4) |
