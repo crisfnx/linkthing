@@ -6,6 +6,11 @@ import type { Link } from "@/lib/extract/types";
 import { toggleStar } from "@/lib/library/details";
 import { textAt, type LibraryRows } from "@/lib/library/rows";
 import {
+  onlyTextDiffers,
+  queryFromSearch,
+  searchFromQuery,
+} from "@/lib/query/url";
+import {
   buildView,
   EMPTY_QUERY,
   SORTS,
@@ -39,7 +44,11 @@ function isTyping(target: EventTarget | null): boolean {
 // is deferred: the box takes every keystroke at once and the list follows as
 // soon as it can, which at 50 k links is the next frame or two (§8.6).
 export function LibraryView({ db, rows, sourceNames }: Props) {
-  const [query, setQuery] = useState<Query>(EMPTY_QUERY);
+  // The view lives in the address (§6.3): read once here, written back below.
+  const [query, setQuery] = useState<Query>(() =>
+    queryFromSearch(window.location.search),
+  );
+  const inAddress = useRef(query);
   const text = useDeferredValue(query.text);
   // Opened groups of copies, for these rows; a new read starts closed.
   const [open, setOpen] = useState<{
@@ -113,6 +122,32 @@ export function LibraryView({ db, rows, sourceNames }: Props) {
     const link = await db.links.get(textAt(rows.ids, row));
     if (link) await star(link);
   }
+
+  // Typing replaces the history entry, so Back doesn't step through letters;
+  // a filter, sort or duplicates change adds one, so Back undoes it. Next.js
+  // follows pushState and replaceState (it patches them).
+  useEffect(() => {
+    const search = searchFromQuery(query);
+    if (search === searchFromQuery(inAddress.current)) return;
+    const url = `${location.pathname}${search ? `?${search}` : ""}${location.hash}`;
+    if (onlyTextDiffers(inAddress.current, query)) {
+      history.replaceState(null, "", url);
+    } else {
+      history.pushState(null, "", url);
+    }
+    inAddress.current = query;
+  }, [query]);
+
+  // Back and Forward: the view the address now holds.
+  useEffect(() => {
+    function onPopState() {
+      const next = queryFromSearch(location.search);
+      inAddress.current = next;
+      setQuery(next);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // "/" goes to the search box (§7, Keyboard).
   useEffect(() => {

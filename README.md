@@ -6,7 +6,7 @@ LinkVault (working name; the repo is `linkthing`) is a local-first web app for r
 
 Nothing leaves your browser. There's no account and no upload.
 
-> **Status: early development.** The extraction engine and the import screen are built: drop in a chat export or any text, or click **Try with sample data**, and see what was found. Browsing the links themselves (M3) is next. The UI is deliberately plain until a design system is chosen.
+> **Status: early development.** Importing and browsing work: drop in a chat export or any text (or click **Try with sample data**), then search, filter, sort and open every link, all in your browser. Managing sources, stars and exports (M4) is next. The UI is deliberately plain until a design system is chosen.
 
 ---
 
@@ -42,9 +42,19 @@ Chats and notes make good "save for later" bins and bad libraries. The links are
 - **A summary of what came out:** links, unique links, sites and dates, then the list of your sources.
 - **Big files are fine.** A 10 MB export takes three to five seconds (Safari is the quicker), and the page stays responsive throughout. Files up to 100 MB are accepted, with a note above 25 MB that it will take a while.
 
+### Built: browsing
+
+- **Readable titles from the link alone.** "Post by @exampledev", "Shared post in r/webdev", "YouTube video at 1:35", "Lisbon beyond the trams": worked out from the URL, with nothing fetched. A link with nothing readable in it shows its URL.
+- **A list that stays fast.** Only the rows on screen are drawn, so 50,000 links scroll and search as smoothly as 50.
+- **Search that knows sites by every name.** Every word must match the URL, title, message, nearby messages or sender; capitals and accents don't matter, and `x.com` finds links shared as twitter.com.
+- **Filters with counts** for sites, kinds, senders, sources and dates (by year and month), plus five sorts and a toggle that collapses duplicates into one row with a count.
+- **Details for each link:** the cleaned URL and what tracking was taken out, the message with the link highlighted, nearby messages, sender, date, source and line; open, copy or star it.
+- **The view lives in the address.** Bookmark a search, reload, or press Back to undo a filter.
+- **Keyboard first:** `/` search, `j`/`k` move, Enter details, `o` open, `c` copy, `s` star, `Esc` close.
+
 ### Coming next: the app (MVP)
 
-- A library view with search, filters (site, kind, sender, source, date), sorting, a duplicates toggle and a details panel
+- Rename and delete sources, re-extract them, and a starred filter
 - Export to a JSON backup, CSV, Markdown or a plain list, plus restore from backup
 - Mobile layout, dark mode, keyboard navigation and accessibility
 
@@ -77,8 +87,8 @@ Extraction is pure TypeScript with no DOM or React (enforced by lint). It runs i
 | M0 · Foundations | Tooling, CI, security headers, database schema, worker scaffold | ✅ Done |
 | M1 · Extraction engine | Everything under "Built" above | ✅ Done |
 | M2 · Import | The first screen: drop a file, see progress and a summary | ✅ Done |
-| M3 · Browse | The library: search, filters, details | Next |
-| M4 · Persist & export | Manage sources, stars, exports, backups | |
+| M3 · Browse | The library: search, filters, details | ✅ Done |
+| M4 · Persist & export | Manage sources, stars, exports, backups | Next |
 | M5 · Polish & ship | Mobile, dark mode, accessibility; deployed | |
 | Gate | Two weeks of real use before deciding what comes next | |
 | Phase 1.5 · Breadth | More sources and views | |
@@ -115,14 +125,17 @@ CI runs lint, typecheck, format check and tests on every push, and the build on 
 ```
 app/                Next.js App Router: one page, rendered in the browser
 components/import/  The import screen: drop zone, form, progress, dialog, summary
-components/library/ The workspace and the source list (the library view arrives in M3)
-hooks/              useImport: the import queue, from scan to save
+components/library/ The library: list, search and filters, details drawer
+hooks/              useImport (the import queue), useLibrary (the rows), useExtractClient (the worker)
 lib/extract/        The extraction engine: pure TypeScript
   adapters/         Source formats: whatsapp, plaintext
   url/              Find, repair, decode, validate, clean, dedupe key, domain, kind
   input.ts          Unzip, decode, normalize
   pipeline.ts       Text in, links out
 lib/import/         Scan and save passes, size limits, the sample
+lib/library/        Lean rows for the list, built in the worker; the drawer's details
+lib/query/          Search, filters, counts, sorts and duplicates; the view as a URL
+lib/preview/        Readable titles and URLs from the link alone (Tier 0)
 lib/db/             IndexedDB schema (Dexie)
 lib/workers/        The extraction worker and its typed client
 tests/fixtures/     Anonymized test inputs and the URL edge-case table
