@@ -126,9 +126,9 @@ describe("what each row carries", () => {
       "",
     ]);
     expect(column(rows, "urls")).toEqual([
-      "theguardian.com/travel/2026/mar/10/lisbon-beyond-the-trams",
-      "x.com/exampledev/status/1900000000000000001",
-      "bit.ly/ex4mpleCP",
+      "https://www.theguardian.com/travel/2026/mar/10/lisbon-beyond-the-trams",
+      "https://x.com/exampledev/status/1900000000000000001",
+      "https://bit.ly/ex4mpleCP",
     ]);
   });
 
@@ -239,7 +239,7 @@ test("the number columns go to the page by transfer, not copy", () => {
   const received = structuredClone(rows, { transfer });
   expect(rows.timestamps.length).toBe(0); // moved: detached here
   expect(received.count).toBe(1);
-  expect(textAt(received.urls, 0)).toBe("example.com/a");
+  expect(textAt(received.urls, 0)).toBe("https://example.com/a");
 });
 
 describe("loading from the database", () => {

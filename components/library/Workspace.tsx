@@ -8,7 +8,7 @@ import { useLibrary } from "@/hooks/useLibrary";
 import { createDb } from "@/lib/db/schema";
 import { strings } from "@/lib/strings";
 import { LibrarySummary } from "./LibrarySummary";
-import { SourceList } from "./SourceList";
+import { LinkList } from "./LinkList";
 
 // Everything that needs the browser: IndexedDB and the worker (§8.2). Loaded
 // by WorkspaceLoader, so it never renders on the server.
@@ -20,10 +20,13 @@ export default function Workspace() {
   const [db] = useState(() =>
     createDb(undefined, () => setUpgradeNeeded(true)),
   );
-  // Undefined until the count is in, so the sample isn't offered by mistake.
-  const sources = useLiveQuery(() => db.sources.count(), [db]);
+  // Small, so a live query. Undefined until read: neither screen shows
+  // before it's known which one applies.
+  const sources = useLiveQuery(() => db.sources.toArray(), [db]);
   const connect = useExtractClient();
   const library = useLibrary(db, connect);
+  const sourceNames = new Map(sources?.map((s) => [s.id, s.name]));
+  const hasSources = sources !== undefined && sources.length > 0;
 
   return (
     <>
@@ -42,10 +45,30 @@ export default function Workspace() {
           </button>
         </div>
       )}
-      <Importer connect={connect} empty={sources === 0}>
-        <LibrarySummary library={library} />
-        <SourceList db={db} />
-      </Importer>
+      {sources !== undefined && (
+        <Importer
+          connect={connect}
+          empty={sources.length === 0}
+          library={hasSources}
+        >
+          {hasSources && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="px-4 py-2 text-sm text-foreground/65">
+                <LibrarySummary library={library} />
+              </div>
+              {library.status === "loading" && (
+                <p className="px-4 py-2">{strings.libraryLoading}</p>
+              )}
+              {library.status === "ready" &&
+                (library.rows.count === 0 ? (
+                  <p className="px-4 py-2">{strings.libraryHasNoLinks}</p>
+                ) : (
+                  <LinkList rows={library.rows} sourceNames={sourceNames} />
+                ))}
+            </div>
+          )}
+        </Importer>
+      )}
     </>
   );
 }

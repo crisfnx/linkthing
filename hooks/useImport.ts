@@ -117,5 +117,9 @@ export function useImport({ connect, decide = acceptScan }: Options) {
     retry: () => {
       if (state.status === "failed") void importAll(state.rest, state.results);
     },
+    // Puts away what the last import left on screen.
+    dismiss: () => {
+      if (!busy.current) setState({ status: "idle" });
+    },
   };
 }

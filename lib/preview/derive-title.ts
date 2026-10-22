@@ -5,9 +5,10 @@
 // (`/blog/how-to-ship-fast` → "How to ship fast"). Undefined when the URL
 // says nothing a person would read, and the list shows the URL instead.
 //
-// Titles and display URLs are decoded from percent-encoding, so invisible
-// and direction-changing characters are removed: a URL can't make its own
-// title read backwards.
+// Titles are decoded from percent-encoding, so invisible and
+// direction-changing characters are removed, as they are from display URLs
+// (display-url.ts): a URL can't make its own title read backwards.
+import { clean } from "./display-url";
 
 export interface TitleInput {
   canonicalUrl: string;
@@ -24,14 +25,6 @@ interface Parts {
 
 const MAX_TITLE = 100;
 
-// Bidi controls, zero-width characters and C0/C1 controls.
-const INVISIBLE =
-  /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;
-
-function clean(text: string): string {
-  return text.replace(INVISIBLE, "").replace(/\s+/g, " ").trim();
-}
-
 function decode(text: string): string {
   try {
     return decodeURIComponent(text);
@@ -47,20 +40,6 @@ function truncate(text: string): string {
 // "how to ship fast" → "How to ship fast"; "Using IndexedDB" is left alone.
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-// A canonical URL without its scheme, "www." and trailing slash, decoded for
-// reading: "en.wikipedia.org/wiki/Belém_Tower". Hosts stay as they are, in
-// punycode where they're written that way (§8.7).
-export function displayUrl(canonicalUrl: string): string {
-  let text = canonicalUrl.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
-  if (text.endsWith("/")) text = text.slice(0, -1);
-  try {
-    text = decodeURI(text);
-  } catch {
-    // a malformed escape: show it as written
-  }
-  return clean(text);
 }
 
 // --- The generic rule: the URL's most readable path segment ------------------

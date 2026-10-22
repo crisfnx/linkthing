@@ -11,7 +11,7 @@
 import type { LinkVaultDb } from "@/lib/db/schema";
 import { LINK_KINDS, type Link, type LinkKind } from "@/lib/extract/types";
 import { aliasesOf } from "@/lib/extract/url/domain";
-import { deriveTitle, displayUrl } from "@/lib/preview/derive-title";
+import { deriveTitle } from "@/lib/preview/derive-title";
 
 // Row i's text is text.slice(offsets[i], offsets[i + 1] - 1). Rows are joined
 // by U+0000, which no row contains, so a search can't match across two.
@@ -25,7 +25,7 @@ export interface LibraryRows {
   // Newest first; undated links last, latest import first, then in file order.
   ids: PackedText; // Link ids, for reading the full link (drawer, exports)
   titles: PackedText; // link text or a Tier 0 title; "" when there's none
-  urls: PackedText; // the canonical URL for reading (displayUrl)
+  urls: PackedText; // the canonical URL: opened on click, read via displayUrl
   search: PackedText; // lowercased and without accents (foldForSearch)
   timestamps: Float64Array; // NaN when undated
   kinds: Uint8Array; // index into LINK_KINDS
@@ -151,7 +151,7 @@ export class RowsBuilder {
     }
     this.ids.push(link.id);
     this.titles.push(title);
-    this.urls.push(displayUrl(link.canonicalUrl));
+    this.urls.push(link.canonicalUrl);
     this.search.push(
       foldForSearch(
         [

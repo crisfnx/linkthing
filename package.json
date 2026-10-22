@@ -14,6 +14,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@tanstack/react-virtual": "3.14.13",
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
     "fflate": "^0.8.3",
