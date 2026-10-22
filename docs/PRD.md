@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 22 October 2026 (v2.21: M3 complete; see Document history) |
+| **Updated** | 22 October 2026 (v2.22: X's links shown as x.com; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -209,7 +209,7 @@ The version last applied is stored in the `meta` row (§5).
 
 ### 4.5 Domain
 
-Use the public suffix list (`tldts`) to get the **registrable domain**: `m.youtube.com`, `www.youtube.com` → `youtube.com`; `foo.github.io` stays `foo.github.io`. Keep `host` separately. Apply a small alias map so obviously-same services group together: `youtu.be → youtube.com`, `x.com`, `mobile.twitter.com` → `twitter.com`, `t.co` flagged as shortener. Aliases are display grouping only; `host` is untouched. The subset of aliases that are true mirrors (same path, same page) is also applied to `urlKey` (§4.4).
+Use the public suffix list (`tldts`) to get the **registrable domain**: `m.youtube.com`, `www.youtube.com` → `youtube.com`; `foo.github.io` stays `foo.github.io`. Keep `host` separately. Apply a small alias map so obviously-same services group together: `youtu.be → youtube.com`, `x.com`, `mobile.twitter.com` → `twitter.com`, `t.co` flagged as shortener. Aliases are display grouping only; `host` is untouched. The subset of aliases that are true mirrors (same path, same page) is also applied to `urlKey` (§4.4). On screen a group can go by another name (`siteName`): X's links stay grouped under `twitter.com`, as stored and in `urlKey`, but show as `x.com` in the sites filter, the row badge and the drawer (owner's choice, v2.22), so stored links need no change; each link's own URL still shows the host it was shared with.
 
 ### 4.6 Classify (cheap, URL-only heuristics)
 
@@ -430,7 +430,7 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
 ### 6.3 Search, filter, sort
 
 - Search box filters on URL, title, bookmark folder, context, nearby messages and sender; case-insensitive; debounced; results count shown. (M3)
-- Domains are searched under every name they go by (M3). Links are grouped and displayed under one name (`twitter.com`, `youtube.com`), but searching or filtering for an alias finds the whole group, and the other way round: `x.com` finds links shared as twitter.com, `twitter.com` finds x.com links, and the same holds for `youtu.be` ↔ `youtube.com`, `fb.com` ↔ `facebook.com`, `redd.it` ↔ `reddit.com` and every other alias in Appendix B (`aliasesOf` in `lib/extract/url/domain.ts`). True shorteners (`bit.ly`, `t.co`, `share.google`) can't be matched to their target until they are resolved (§4.7), so they are found under their own name.
+- Domains are searched under every name they go by (M3). Links are grouped and displayed under one name (`x.com` for X's links, `youtube.com`; §4.5), but searching or filtering for an alias finds the whole group, and the other way round: `x.com` finds links shared as twitter.com, `twitter.com` finds x.com links, and the same holds for `youtu.be` ↔ `youtube.com`, `fb.com` ↔ `facebook.com`, `redd.it` ↔ `reddit.com` and every other alias in Appendix B (`aliasesOf` in `lib/extract/url/domain.ts`). True shorteners (`bit.ly`, `t.co`, `share.google`) can't be matched to their target until they are resolved (§4.7), so they are found under their own name.
 - Field prefixes (M6, built together with the tag syntax; until then the facets cover the same ground): `site:twitter`, `domain:youtube.com`, `sender:Cris`, `kind:video`, `after:2023-05`, `before:2024`, `is:starred`, `is:short`, `is:bare`, `source:"chat with me"`, `tag:recipes`, `-tag:recipes`, `is:untagged`.
 - Plain-word interpretation (M6): words are matched against tags (with aliases), site names, titles, context, senders and URLs; every word must match something, and stop words (`from`, `on`, `about`, `the`, `my`, `links`) are ignored. So `recipes from twitter` means `tag:recipes site:twitter`. Site names resolve through the domain alias map plus short names (`twitter`, `x`, `youtube`, `yt`, `github`, `gh`, `reddit`, `insta`). The search box shows its interpretation as removable chips, so a wrong guess is visible and fixable.
 - Facet sidebar with counts: domains (top 20 + "more"), kinds, senders, sources, year/month. Multi-select within a facet, AND across facets.
@@ -1196,3 +1196,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 22 Oct 2026 | v2.19: M3 search, filters and sort (`lib/query/view.ts`, `LibraryView`, `FacetPanel`): every word must match, deferred rather than debounced; facets with counts that leave out their own selection, "No sender" and "No date" values; five sorts with undated links last; collapsed duplicates with ×N that opens the copies (§6.3); search names cover every Appendix B mirror (§5); `/` to search (§7); timings (§8.6) |
 | 22 Oct 2026 | v2.20: M3 details drawer (`DetailsDrawer`, `lib/library/details.ts`): opened by a plain click or Enter, the title still a real link for ⌘-click; what cleaning took out, the URL as found, the message with the link marked, nearby, sender, date, source and line, a Tier 0 card in the preview's place; Open link (cleaned, `noopener`), Copy link, and the star by `urlKey`, with `o`, `c` and `s` from the drawer or the focused row (§6.2, §7); notices inside the open dialog; the boolean `starred` index noted for M4 (§5) |
 | 22 Oct 2026 | v2.21: M3 complete. The view in the address (`lib/query/url.ts`): typing replaces the history entry, other changes add one, Back restores without a reload (§6.3); the 50 k-link budget measured in Chrome (§8.6); M3's Browse criteria ticked (§11); README updated |
+| 22 Oct 2026 | v2.22: X's links, grouped under twitter.com, are shown as x.com in the sites filter, row badges and drawer, display only, so stored links and `urlKey`s are unchanged and an address with `site=twitter.com` still works (owner's choice; §4.5, §6.3); filter groups' Clear sits beside their title |

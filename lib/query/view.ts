@@ -21,7 +21,7 @@ export const SORTS: readonly Sort[] = [
 // filters all must.
 export interface Query {
   text: string;
-  sites: readonly string[]; // grouped domains: twitter.com covers x.com
+  sites: readonly string[]; // sites as shown: x.com covers twitter.com too
   kinds: readonly LinkKind[];
   senders: readonly string[]; // "" is "no sender"
   sources: readonly string[]; // source ids

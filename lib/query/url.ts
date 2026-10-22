@@ -8,6 +8,7 @@
 // A filter value repeats its parameter; an empty value is "no sender" or
 // "no date". Unknown kinds and sorts are dropped rather than trusted.
 import { LINK_KINDS, type LinkKind } from "@/lib/extract/types";
+import { siteName } from "@/lib/extract/url/domain";
 import { EMPTY_QUERY, SORTS, type Query, type Sort } from "./view";
 
 const LISTS = [
@@ -28,7 +29,8 @@ export function queryFromSearch(search: string): Query {
   const sort = params.get("sort");
   return {
     text: params.get("q") ?? "",
-    sites: params.getAll("site"),
+    // An address from before X's links were shown as x.com still works.
+    sites: [...new Set(params.getAll("site").map(siteName))],
     kinds: [...new Set(kinds)],
     senders: params.getAll("sender"),
     sources: params.getAll("source"),

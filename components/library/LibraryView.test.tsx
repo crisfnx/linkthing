@@ -139,7 +139,7 @@ test("a filter narrows the list, shows its counts, and clears", () => {
     within(sites)
       .getAllByRole("checkbox")
       .map((box) => box.closest("label")?.textContent),
-  ).toEqual(["youtube.com2", "example.com1", "twitter.com1"]);
+  ).toEqual(["youtube.com2", "example.com1", "x.com1"]);
 
   fireEvent.click(
     within(sites).getByRole("checkbox", { name: /youtube\.com/ }),
@@ -224,9 +224,7 @@ test("on narrow screens the filters open in a dialog", () => {
   renderView();
   fireEvent.click(screen.getByRole("button", { name: "Filters" }));
   const dialog = screen.getByRole("dialog", { name: "Filters" });
-  fireEvent.click(
-    within(dialog).getByRole("checkbox", { name: /twitter\.com/ }),
-  );
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: /^x\.com/ }));
   expect(titles()).toEqual(["Post by @exampledev"]);
   fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -270,7 +268,7 @@ describe("details", () => {
     expect(drawer.textContent).toContain("Saving this for the trip");
     expect(drawer.textContent).toContain("Sent byAna");
     expect(drawer.textContent).toContain("SourceChat with Me, line 128");
-    expect(drawer.textContent).toContain("Social post on twitter.com");
+    expect(drawer.textContent).toContain("Social post on x.com");
 
     fireEvent.click(within(drawer).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -398,9 +396,7 @@ describe("the address", () => {
 
   test("Back puts the view the address holds", () => {
     const { sidebar } = renderView();
-    fireEvent.click(
-      within(sidebar).getByRole("checkbox", { name: /twitter\.com/ }),
-    );
+    fireEvent.click(within(sidebar).getByRole("checkbox", { name: /^x\.com/ }));
     expect(titles()).toEqual(["Post by @exampledev"]);
 
     // What the browser does on Back: the earlier address, then popstate.
@@ -411,7 +407,7 @@ describe("the address", () => {
     expect(titles()).toHaveLength(4);
     expect(
       within(sidebar)
-        .getByRole("checkbox", { name: /twitter\.com/ })
+        .getByRole("checkbox", { name: /^x\.com/ })
         .matches(":checked"),
     ).toBe(false);
   });

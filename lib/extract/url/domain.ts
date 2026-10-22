@@ -32,6 +32,19 @@ export function aliasesOf(domain: string): string[] {
   ];
 }
 
+// How a grouped domain is named on screen (owner's choice, §4.5): X's links
+// are grouped under twitter.com, the name every mirror is rewritten to
+// (§4.4), but shown as x.com, the name people know now. Display only: stored
+// links and urlKeys keep twitter.com, and a search for either name finds the
+// whole group.
+const SITE_NAMES: Record<string, string> = {
+  "twitter.com": "x.com",
+};
+
+export function siteName(domain: string): string {
+  return SITE_NAMES[domain] ?? domain;
+}
+
 // The mirrors in Appendix B that are hosts of the same registrable domain:
 // a search for any of them finds the whole group too.
 const MIRROR_HOSTS: Record<string, string[]> = {

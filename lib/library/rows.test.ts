@@ -173,6 +173,18 @@ describe("what each row carries", () => {
     ]);
   });
 
+  test("X's links, as x.com or twitter.com, are one site shown as x.com", () => {
+    const rows = build([
+      link("https://twitter.com/exampledev/status/1", { timestamp: 2 }),
+      link("https://x.com/exampledev/status/2", { timestamp: 1 }),
+    ]);
+    expect(rows.domainNames).toEqual(["x.com"]);
+    expect(Array.from(rows.domains)).toEqual([0, 0]);
+    // Stored links keep the group's own name; search knows both.
+    expect(textAt(rows.search, 0)).toContain("twitter.com");
+    expect(textAt(rows.search, 0)).toContain("x.com");
+  });
+
   test("duplicates share a key: the same video shared two ways", () => {
     const rows = build([
       link("https://youtu.be/Ex4mpLeV1d0?si=Zx9", { timestamp: 3 }),
