@@ -53,9 +53,11 @@ function Section({
 }) {
   // The legend names the group for screen readers. Browsers draw a legend on
   // the fieldset's top edge, outside its content box, so it can't share a row
-  // with Clear; the row shows the title instead.
+  // with Clear; the row shows the title instead. The fieldset is positioned so
+  // the hidden legend (absolute) stays inside the sidebar's scroll area
+  // rather than stretching the page.
   return (
-    <fieldset className="flex min-w-0 flex-col gap-1">
+    <fieldset className="relative flex min-w-0 flex-col gap-1">
       <legend className="sr-only">{title}</legend>
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <span aria-hidden className="font-semibold">

@@ -7,8 +7,10 @@ import { displayUrl } from "@/lib/preview/display-url";
 import { strings } from "@/lib/strings";
 import { KindIcon } from "./KindIcon";
 
-// Fixed, so the list never measures a row: two lines of text and padding.
-const ROW_HEIGHT = 60;
+// Fixed, so the list never measures a row: two lines of text (20 and 16 px)
+// and 14 px between rows, the owner's choice between the first 60 px and a
+// tighter 40; other densities and cards come as views (§6.2).
+const ROW_HEIGHT = 50;
 
 // A site's badge colour, the same for every link to it. OKLCH keeps the
 // lightness equal across hues, so white letters read on all of them.
@@ -76,12 +78,12 @@ function LinkRow({
       role="listitem"
       aria-posinset={position + 1}
       aria-setsize={count}
-      className={`absolute inset-x-0 top-0 flex items-center gap-3 pr-4 hover:bg-current/5 has-focus-visible:bg-current/10 ${copies === 0 ? "pl-15" : "pl-4"}`}
+      className={`absolute inset-x-0 top-0 flex items-center gap-2.5 pr-4 hover:bg-current/5 has-focus-visible:bg-current/10 ${copies === 0 ? "pl-12.5" : "pl-4"}`}
       style={{ height: ROW_HEIGHT, transform: `translateY(${start}px)` }}
     >
       <span
         aria-hidden
-        className="grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold text-white"
+        className="grid size-6 shrink-0 place-items-center rounded text-xs font-semibold text-white"
         style={{ backgroundColor: siteColor(domain) }}
       >
         {domain.charAt(0).toUpperCase()}
@@ -108,12 +110,14 @@ function LinkRow({
             event.preventDefault();
             onOpen(row);
           }}
-          className="block truncate rounded-sm font-medium hover:underline"
+          // Stretched over the whole row, so the row is the target: the
+          // link alone would be 20 px tall, under WCAG's 24 px (2.5.8).
+          className="block truncate rounded-sm text-sm leading-5 font-medium after:absolute after:inset-0 hover:underline"
         >
           {title || shown}
         </a>
-        <p className="flex items-center gap-1.5 text-sm text-foreground/65">
-          <KindIcon kind={kind} className="size-3.5 shrink-0" />
+        <p className="flex items-center gap-1 text-xs leading-4 text-foreground/65">
+          <KindIcon kind={kind} className="size-3 shrink-0" />
           <span className="sr-only">{strings.kindNames[kind]}: </span>
           <span className="truncate">{details}</span>
         </p>
@@ -126,7 +130,8 @@ function LinkRow({
           aria-label={strings.copiesLabel(copies, open)}
           onFocus={() => onActivate(position)}
           onClick={() => onToggleCopies(row)}
-          className="shrink-0 rounded-full border border-current/30 px-2 text-sm tabular-nums"
+          // Above the stretched link, so it stays its own button.
+          className="relative z-10 shrink-0 rounded-full border border-current/30 px-2 text-xs tabular-nums"
         >
           {strings.copies(copies)}
         </button>
@@ -134,8 +139,7 @@ function LinkRow({
       {!Number.isNaN(time) && (
         <time
           dateTime={new Date(time).toISOString()}
-          title={strings.linkDateAndTime(time)}
-          className="shrink-0 text-sm text-foreground/65 tabular-nums"
+          className="shrink-0 text-xs text-foreground/65 tabular-nums"
         >
           {strings.linkDate(time)}
         </time>
