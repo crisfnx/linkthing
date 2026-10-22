@@ -1,14 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { inputSize } from "@/lib/import/limits";
 import type { ImportProgress } from "@/lib/import/options";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import { strings } from "@/lib/strings";
-import {
-  createExtractClient,
-  WorkerError,
-  type ExtractClient,
-} from "@/lib/workers/client";
+import { WorkerError, type ExtractClient } from "@/lib/workers/client";
 import type { WorkerErrorCode } from "@/lib/workers/protocol";
 
 export type ImportState =
@@ -41,7 +37,7 @@ export type Decide = (
 const acceptScan: Decide = () => ({});
 
 interface Options {
-  connect?: () => ExtractClient;
+  connect: () => ExtractClient; // the page's worker (useExtractClient)
   decide?: Decide;
 }
 
@@ -52,32 +48,18 @@ export interface Item {
 
 // Imports files or text one at a time through the worker (§8.2): scan, decide,
 // save. A cancel or a failure stops the rest of the queue.
-export function useImport({
-  connect = createExtractClient,
-  decide = acceptScan,
-}: Options = {}) {
+export function useImport({ connect, decide = acceptScan }: Options) {
   const [state, setState] = useState<ImportState>({ status: "idle" });
-  const client = useRef<ExtractClient | null>(null);
   const busy = useRef(false);
   // A cancel can land after the scan's last check and be missed by the
   // worker, so the queue checks it before every save as well.
   const cancelled = useRef(false);
 
-  // The worker starts with the first import and lasts as long as the page.
-  useEffect(
-    () => () => {
-      client.current?.terminate();
-      client.current = null;
-    },
-    [],
-  );
-
   async function importAll(items: Item[], earlier: Imported[] = []) {
     if (items.length === 0 || busy.current) return;
     busy.current = true;
     cancelled.current = false;
-    client.current ??= connect();
-    const worker = client.current;
+    const worker = connect();
     const results = [...earlier];
     let last: ImportState = { status: "done", results };
 
@@ -130,7 +112,7 @@ export function useImport({
       ),
     cancel: () => {
       cancelled.current = true;
-      client.current?.cancel();
+      if (busy.current) connect().cancel();
     },
     retry: () => {
       if (state.status === "failed") void importAll(state.rest, state.results);

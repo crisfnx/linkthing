@@ -1,6 +1,7 @@
 import type { ImportProgress } from "@/lib/import/options";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
+import type { LibraryRows } from "@/lib/library/rows";
 import type {
   WorkerErrorCode,
   WorkerRequest,
@@ -34,6 +35,8 @@ export interface ExtractClient {
   // The save pass, for the last scan. Rejects with "cancelled" on cancel.
   start(choice?: ImportChoice, onProgress?: OnProgress): Promise<Imported>;
   cancel(): void;
+  // The whole library as rows (§5), for browsing.
+  load(): Promise<LibraryRows>;
   terminate(): void;
 }
 
@@ -103,6 +106,7 @@ export function createExtractClient(
       return reply.imported;
     },
     cancel: () => send({ type: "cancel" }),
+    load: async () => (await call({ type: "load" }, "rows")).rows,
     terminate: () => worker.terminate(),
   };
 }

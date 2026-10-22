@@ -14,7 +14,7 @@ import { ImportProgress } from "./ImportProgress";
 import { ImportSummary } from "./ImportSummary";
 
 interface Props {
-  connect?: () => ExtractClient;
+  connect: () => ExtractClient; // the page's worker (useExtractClient)
   empty?: boolean; // the library has no sources: offer the sample data
   children?: ReactNode;
 }
