@@ -10,14 +10,20 @@ import type { WorkerErrorCode } from "@/lib/workers/protocol";
 import { DropZone } from "./DropZone";
 import { ImportDialog } from "./ImportDialog";
 import { ImportForm } from "./ImportForm";
+import { ImportPanel } from "./ImportPanel";
 import { ImportProgress } from "./ImportProgress";
 import { ImportSummary } from "./ImportSummary";
 
 interface Props {
   connect: () => ExtractClient; // the page's worker (useExtractClient)
   empty?: boolean; // the library has no sources: offer the sample data
+  // The library has links: the list takes the page (children), and the ways
+  // in move behind an Import button.
+  library?: boolean;
   children?: ReactNode;
 }
+
+const button = "rounded-md border border-current px-3 py-1.5 font-medium";
 
 // Failures that may not happen twice. A zip without a chat, or a damaged
 // one, fails the same way again: its message says what to do instead.
@@ -40,9 +46,15 @@ function announcement(state: ImportState): string {
   }
 }
 
-// The first screen (M2): drop, pick or paste, watch the progress, read the
-// summary. Browsing the links arrives with M3.
-export function Importer({ connect, empty = false, children }: Props) {
+// Owns the import flow on either screen. The first screen (M2): drop, pick
+// or paste, watch the progress, read the summary. The library (M3): a header
+// with an Import button, the progress and summary above the list.
+export function Importer({
+  connect,
+  empty = false,
+  library = false,
+  children,
+}: Props) {
   // The question the dialog is asking, and where its answer goes.
   const [asking, setAsking] = useState<{
     scan: ScanResult;
@@ -53,26 +65,124 @@ export function Importer({ connect, empty = false, children }: Props) {
       ? {}
       : new Promise((answer) => setAsking({ scan, answer }));
 
-  const { state, importFiles, importText, cancel, retry } = useImport({
+  const { state, importFiles, importText, cancel, retry, dismiss } = useImport({
     connect,
     decide,
   });
   const running = state.status === "running";
   const results = "results" in state ? state.results : [];
+  const [panelOpen, setPanelOpen] = useState(false);
 
-  // Cancel goes with the progress bar, and the sample button once the library
-  // has a source, in whichever order the two arrive. If either had focus, put
-  // it back on "Choose files" rather than leave the keyboard user nowhere.
-  const chooseFiles = useRef<HTMLButtonElement>(null);
-  const before = useRef({ running, empty });
+  // Cancel goes with the progress bar, the sample button once the library
+  // has a source, and the whole first screen once it has links, in whichever
+  // order these arrive. If what went had focus, put it on "Choose files", or
+  // on Import in the library, rather than leave the keyboard user nowhere.
+  const returnFocus = useRef<HTMLButtonElement>(null);
+  const before = useRef({ running, empty, library });
   useEffect(() => {
     const gone =
-      (before.current.running && !running) || (before.current.empty && !empty);
+      (before.current.running && !running) ||
+      (before.current.empty && !empty) ||
+      before.current.library !== library;
     if (gone && document.activeElement === document.body) {
-      chooseFiles.current?.focus();
+      returnFocus.current?.focus();
     }
-    before.current = { running, empty };
-  }, [running, empty]);
+    before.current = { running, empty, library };
+  }, [running, empty, library]);
+
+  const announced = (
+    <p role="status" className="sr-only">
+      {announcement(state)}
+    </p>
+  );
+  const outcome = (
+    <>
+      {state.status === "running" && (
+        <ImportProgress
+          label={state.label}
+          size={state.size}
+          progress={state.progress}
+          remaining={state.remaining}
+          onCancel={cancel}
+        />
+      )}
+      {asking && (
+        <ImportDialog
+          scan={asking.scan}
+          onDecide={(choice) => {
+            setAsking(null);
+            asking.answer(choice);
+          }}
+        />
+      )}
+      {state.status === "cancelled" && <p>{strings.cancelled}</p>}
+      {state.status === "done" && state.results.length === 0 && (
+        <p>{strings.imported(0)}</p>
+      )}
+      {state.status === "failed" && (
+        <div role="alert" className="flex flex-col gap-1">
+          <p>{strings.errors[state.code](state.label)}</p>
+          {state.code === "unexpected" && (
+            <p className="font-mono text-sm opacity-70">{state.message}</p>
+          )}
+          {RETRYABLE.has(state.code) && (
+            <div>
+              <button type="button" className={button} onClick={retry}>
+                {strings.tryAgain}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {results.length > 0 && <ImportSummary results={results} />}
+    </>
+  );
+
+  if (library) {
+    const finished = !running && state.status !== "idle";
+    return (
+      <DropZone disabled={running} onFiles={importFiles} onText={importText}>
+        <div className="flex h-dvh flex-col">
+          <header className="flex items-center justify-between gap-4 border-b border-current/15 px-4 py-3">
+            <h1 className="text-xl font-bold">{strings.appName}</h1>
+            <button
+              ref={returnFocus}
+              type="button"
+              className={`${button} aria-disabled:opacity-50`}
+              aria-disabled={running}
+              onClick={() => {
+                if (!running) setPanelOpen(true);
+              }}
+            >
+              {strings.importButton}
+            </button>
+          </header>
+          {panelOpen && (
+            <ImportPanel
+              busy={running}
+              onFiles={importFiles}
+              onText={importText}
+              onClose={() => setPanelOpen(false)}
+            />
+          )}
+          {announced}
+          {state.status !== "idle" && (
+            <div className="flex max-h-[40dvh] shrink-0 flex-col gap-4 overflow-y-auto border-b border-current/15 px-4 py-4">
+              {outcome}
+              {finished && (
+                <div>
+                  <button type="button" className={button} onClick={dismiss}>
+                    {strings.dismiss}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {children}
+        </div>
+      </DropZone>
+    );
+  }
 
   return (
     <DropZone disabled={running} onFiles={importFiles} onText={importText}>
@@ -84,59 +194,15 @@ export function Importer({ connect, empty = false, children }: Props) {
         </header>
 
         <ImportForm
-          ref={chooseFiles}
+          ref={returnFocus}
           busy={running}
           sample={empty}
           onFiles={importFiles}
           onText={importText}
         />
 
-        <p role="status" className="sr-only">
-          {announcement(state)}
-        </p>
-        {state.status === "running" && (
-          <ImportProgress
-            label={state.label}
-            size={state.size}
-            progress={state.progress}
-            remaining={state.remaining}
-            onCancel={cancel}
-          />
-        )}
-        {asking && (
-          <ImportDialog
-            scan={asking.scan}
-            onDecide={(choice) => {
-              setAsking(null);
-              asking.answer(choice);
-            }}
-          />
-        )}
-        {state.status === "cancelled" && <p>{strings.cancelled}</p>}
-        {state.status === "done" && state.results.length === 0 && (
-          <p>{strings.imported(0)}</p>
-        )}
-        {state.status === "failed" && (
-          <div role="alert" className="flex flex-col gap-1">
-            <p>{strings.errors[state.code](state.label)}</p>
-            {state.code === "unexpected" && (
-              <p className="font-mono text-sm opacity-70">{state.message}</p>
-            )}
-            {RETRYABLE.has(state.code) && (
-              <div>
-                <button
-                  type="button"
-                  className="rounded-md border border-current px-3 py-1.5 font-medium"
-                  onClick={retry}
-                >
-                  {strings.tryAgain}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-        {results.length > 0 && <ImportSummary results={results} />}
-
+        {announced}
+        {outcome}
         {children}
       </main>
     </DropZone>

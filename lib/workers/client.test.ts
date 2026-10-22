@@ -126,7 +126,7 @@ test("load reads the library as rows", async () => {
   await client.start();
   const rows = await client.load();
   expect(rows.count).toBe(2);
-  expect(textAt(rows.urls, 0)).toBe("example.com/a");
+  expect(textAt(rows.urls, 0)).toBe("https://example.com/a");
 });
 
 // Cancel stops the running import. A load isn't one, so it mustn't become

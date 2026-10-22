@@ -2,6 +2,7 @@
 // place so translating later is a mechanical change. Numbers and dates use
 // the browser's locale.
 import type { Source } from "@/lib/db/types";
+import type { LinkKind } from "@/lib/extract/types";
 import { MAX_INPUT_BYTES } from "@/lib/import/limits";
 import type { ImportPhase } from "@/lib/import/options";
 import type { WorkerErrorCode } from "@/lib/workers/protocol";
@@ -9,6 +10,10 @@ import type { WorkerErrorCode } from "@/lib/workers/protocol";
 const number = new Intl.NumberFormat();
 const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 const longDay = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+const dayAndTime = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "long",
+  timeStyle: "short",
+});
 const megabytes = new Intl.NumberFormat(undefined, {
   style: "unit",
   unit: "megabyte",
@@ -114,6 +119,10 @@ export const strings = {
       `Something went wrong importing ${label}, and nothing was saved.`,
   } satisfies Record<WorkerErrorCode, (label: string) => string>,
   tryAgain: "Try again",
+  importButton: "Import",
+  importPanel: "Import links",
+  close: "Close",
+  dismiss: "Dismiss",
 
   // The import dialog asks only what the scan couldn't settle (§6.1).
   dialog: {
@@ -143,6 +152,21 @@ export const strings = {
 
   library: (links: number, unique: number, sites: number) =>
     `${count(links, "link")} in your library: ${number.format(unique)} unique, from ${count(sites, "site")}.`,
+  libraryLoading: "Reading your library…",
+  libraryHasNoLinks: "No links yet: what you imported had none.",
+  linksLabel: "Links",
+  kindNames: {
+    video: "Video",
+    social: "Social post",
+    code: "Code",
+    image: "Image",
+    document: "Document",
+    audio: "Audio",
+    other: "Web page",
+  } satisfies Record<LinkKind, string>,
+  linkDate: (at: number) => day.format(at),
+  linkDateAndTime: (at: number) => dayAndTime.format(at),
+  opensInNewTab: "opens in a new tab",
   libraryFailed: (message: string) =>
     `Couldn't read your library (${message}). Reload the page to try again.`,
 

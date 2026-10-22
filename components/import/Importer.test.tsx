@@ -435,6 +435,88 @@ describe("the sample data", () => {
   });
 });
 
+describe("once the library has links", () => {
+  const renderLibrary = (client: ExtractClient) =>
+    render(<Importer connect={() => client} library />);
+
+  test("the form sits behind Import; choosing files closes it and imports", async () => {
+    const client = fakeClient();
+    renderLibrary(client);
+    expect(screen.queryByRole("button", { name: "Choose files" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    const panel = screen.getByRole("dialog", { name: "Import links" });
+    const file = fileNamed("me.txt");
+    fireEvent.change(panel.querySelector("input[type=file]")!, {
+      target: { files: [file] },
+    });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(await screen.findByText("4,644 links found")).toBeTruthy();
+    expect(client.scan).toHaveBeenCalledWith({ file }, expect.any(Function));
+  });
+
+  test("pasted text imports too; an empty paste leaves the form open", async () => {
+    const client = fakeClient();
+    renderLibrary(client);
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    const panel = screen.getByRole("dialog", { name: "Import links" });
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Import text" }));
+    await act(async () => {});
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    fireEvent.change(within(panel).getByLabelText("Or paste text"), {
+      target: { value: "https://example.com/a" },
+    });
+    fireEvent.click(within(panel).getByRole("button", { name: "Import text" }));
+    await screen.findByText("4,644 links found");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("Close puts the form away without importing", () => {
+    const client = fakeClient();
+    renderLibrary(client);
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(client.scan).not.toHaveBeenCalled();
+  });
+
+  test("what an import leaves above the list can be dismissed", async () => {
+    renderLibrary(fakeClient());
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [fileNamed("me.txt")], getData: () => "" },
+    });
+    await screen.findByRole("region", { name: "Imported" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("region", { name: "Imported" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("");
+  });
+
+  test("Import is off during an import, and focus comes back to it after", async () => {
+    const client = fakeClient();
+    let finish: (value: Imported) => void = () => {};
+    client.start.mockImplementation(
+      () => new Promise<Imported>((resolve) => (finish = resolve)),
+    );
+    renderLibrary(client);
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [fileNamed("me.txt")], getData: () => "" },
+    });
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    const importButton = screen.getByRole("button", { name: "Import" });
+    expect(importButton.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(importButton);
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    cancel.focus();
+    await act(async () => finish(imported()));
+    expect(document.activeElement).toBe(importButton);
+  });
+});
+
 describe("the summary", () => {
   test("links, unique links, sites, date range and skipped links", async () => {
     renderImporter(fakeClient());

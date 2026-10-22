@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { describeUrl } from "@/lib/extract/url/describe";
-import { deriveTitle, displayUrl } from "./derive-title";
+import { deriveTitle } from "./derive-title";
+import { displayUrl } from "./display-url";
 
 // As the import describes a link, so canonicalization and alias grouping
 // apply: x.com is grouped as twitter.com, tracking params are gone.
@@ -221,22 +222,4 @@ test("a URL can't make its title or display read backwards", () => {
   expect(displayUrl(describeUrl(url).canonicalUrl)).toBe(
     "example.com/txt.exe-report",
   );
-});
-
-describe("displayUrl", () => {
-  test.each([
-    ["https://www.theguardian.com/travel/", "theguardian.com/travel"],
-    ["https://react.gg/", "react.gg"],
-    ["http://old-site.example.org/page", "old-site.example.org/page"],
-    [
-      "https://en.wikipedia.org/wiki/Bel%C3%A9m_Tower",
-      "en.wikipedia.org/wiki/Belém_Tower",
-    ],
-    // reserved characters stay encoded, so the URL still reads as one
-    ["https://example.com/a%2Fb?q=x%26y", "example.com/a%2Fb?q=x%26y"],
-    // a malformed escape is shown as written
-    ["https://example.com/100%", "example.com/100%"],
-  ])("%s → %s", (url, expected) => {
-    expect(displayUrl(url)).toBe(expected);
-  });
 });
