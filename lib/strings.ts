@@ -3,6 +3,7 @@
 // the browser's locale.
 import type { Source } from "@/lib/db/types";
 import type { LinkKind } from "@/lib/extract/types";
+import type { Sort } from "@/lib/query/view";
 import { MAX_INPUT_BYTES } from "@/lib/import/limits";
 import type { ImportPhase } from "@/lib/import/options";
 import type { WorkerErrorCode } from "@/lib/workers/protocol";
@@ -10,6 +11,7 @@ import type { WorkerErrorCode } from "@/lib/workers/protocol";
 const number = new Intl.NumberFormat();
 const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 const longDay = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+const monthOnly = new Intl.DateTimeFormat(undefined, { month: "long" });
 const dayAndTime = new Intl.DateTimeFormat(undefined, {
   dateStyle: "long",
   timeStyle: "short",
@@ -150,8 +152,49 @@ export const strings = {
     skip: "Don't import",
   },
 
-  library: (links: number, unique: number, sites: number) =>
-    `${count(links, "link")} in your library: ${number.format(unique)} unique, from ${count(sites, "site")}.`,
+  // Search, filters and sort (§6.3).
+  searchLabel: "Search links",
+  sortLabel: "Sort",
+  sorts: {
+    newest: "Newest first",
+    oldest: "Oldest first",
+    site: "Site, A–Z",
+    frequent: "Sites with most links",
+    imported: "Latest import first",
+  } satisfies Record<Sort, string>,
+  dedupe: "Collapse duplicates",
+  filters: "Filters",
+  filtersOn: (n: number) => `Filters (${number.format(n)})`,
+  filterGroups: {
+    sites: "Sites",
+    kinds: "Kinds",
+    senders: "Senders",
+    sources: "Sources",
+    dates: "Dates",
+  },
+  clear: "Clear",
+  clearAll: "Clear search and filters",
+  showAllSites: (n: number) => `Show all ${count(n, "site")}`,
+  showFewerSites: "Show fewer",
+  noSender: "No sender",
+  noDate: "No date",
+  month: (yyyyMm: string) => {
+    const [year, month] = yyyyMm.split("-").map(Number);
+    return monthOnly.format(new Date(year!, month! - 1, 1));
+  },
+  showMonths: (year: string) => `Months of ${year}`,
+  done: "Done",
+  showing: (shown: number, of: number, unique: number) =>
+    shown === of
+      ? `${count(of, "link")}, ${number.format(unique)} unique`
+      : `${number.format(shown)} of ${count(of, "link")}, ${number.format(unique)} unique`,
+  noMatches: "No links match.",
+  copies: (n: number) => `×${number.format(n)}`,
+  copiesLabel: (n: number, open: boolean) =>
+    open
+      ? `Shared ${count(n, "time")}: hide the others`
+      : `Shared ${count(n, "time")}: show all`,
+
   libraryLoading: "Reading your library…",
   libraryHasNoLinks: "No links yet: what you imported had none.",
   linksLabel: "Links",

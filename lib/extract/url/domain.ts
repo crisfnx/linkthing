@@ -31,3 +31,28 @@ export function aliasesOf(domain: string): string[] {
     ...Object.keys(ALIASES).filter((alias) => ALIASES[alias] === domain),
   ];
 }
+
+// The mirrors in Appendix B that are hosts of the same registrable domain:
+// a search for any of them finds the whole group too.
+const MIRROR_HOSTS: Record<string, string[]> = {
+  "twitter.com": ["mobile.twitter.com"],
+  "youtube.com": ["m.youtube.com", "www.youtube.com", "music.youtube.com"],
+  "reddit.com": [
+    "old.reddit.com",
+    "np.reddit.com",
+    "www.reddit.com",
+    "v.redd.it",
+    "i.redd.it",
+  ],
+  "facebook.com": ["m.facebook.com"],
+};
+
+// Every name a link can be searched by (§6.3, Appendix B): its domain's
+// aliases and mirror hosts, and for Wikipedia its language's mobile host.
+export function searchNamesOf(domain: string, host: string): string[] {
+  const names = [...aliasesOf(domain), ...(MIRROR_HOSTS[domain] ?? [])];
+  const wiki = /^([a-z-]+)\.(?:m\.)?wikipedia\.org$/.exec(host);
+  if (wiki)
+    names.push(`${wiki[1]}.wikipedia.org`, `${wiki[1]}.m.wikipedia.org`);
+  return names;
+}
