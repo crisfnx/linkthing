@@ -1,0 +1,30 @@
+05/07/2022, 00:57 - Messages to yourself are end-to-end encrypted. No one else, not even WhatsApp, can read, listen to, or share them. *Learn more*
+05/07/2022, 00:57 - Cris: Test
+05/07/2022, 00:58 - Cris: <Media omitted>
+05/07/2022, 01:42 - Cris: Car battery
+13/07/2022, 09:15 - Cris: https://twitter.com/exampledev/status/1547000000000000001?s=20&t=AbCdEfGhIjKlMnOpQrStUv
+25/08/2022, 17:34 - Cris: Example Gym Northfield
+01632 960123
+https://maps.app.goo.gl/AbCdEfGhIjKlMnOp7
+05/12/2022, 21:09 - Cris: https://www.instagram.com/reel/AbCdEfGhIjK/?igshid=MDJmNzVkMjY=
+
+😂😂😂
+02/02/2023, 14:05 - Cris: You deleted this message
+02/02/2023, 14:05 - Cris: You deleted this message
+18/03/2023, 22:40 - Cris: https://x.com/exampledev/status/1637000000000000002?s=46&t=ZyXwVuTsRqPoNmLkJiHgFe
+18/03/2023, 22:41 - Cris: https://x.com/i/status/1637000000000000002
+29/04/2023, 08:03 - Cris: Recipe for the weekend, double the garlic
+29/04/2023, 08:04 - Cris: https://www.instagram.com/reel/ZyXwVuTsRqP/?igsh=MWxhYmNkZWZnaGlqaw==
+14/06/2023, 19:22 - Cris: https://youtube.com/shorts/AbCdEfGhIjK?feature=share
+14/06/2023, 19:30 - Cris: https://youtu.be/ZyXwVuTsRqP?si=Ab12_cd34efgh5_
+22/09/2023, 12:10 - Cris: Good write-up on caching https://dev.to/exampledev/caching-in-nextjs-2abc
+22/09/2023, 12:15 - Cris: https://github.com/example-org/example-repo?s=09
+03/11/2023, 23:58 - Cris: const url = `https://api.example.com/users/${userId}`;
+const res = await fetch(url);
+11/01/2024, 07:45 - Cris: https://www.reddit.com/r/webdev/s/AbCdEfGh12
+11/01/2024, 07:46 - Cris: https://www.reddit.com/r/webdev/comments/1abcdef/how_do_you_cache_api_calls/
+27/02/2024, 16:20 - Cris: See https://example.com/guide/getting-started. Then the API page
+27/02/2024, 16:21 - Cris: Is it https://example.com/is-it? not sure
+19/05/2024, 10:05 - Cris: https://share.google/AbCdEfGhIjKlMnOpQr
+19/05/2024, 10:06 - Cris: https://search.app/AbCdEfGhIjKlMn
+08/08/2024, 21:30 - Cris: https://amzn.eu/d/AbCdEfG
