@@ -10,7 +10,7 @@
 // copied.
 import type { LinkVaultDb } from "@/lib/db/schema";
 import { LINK_KINDS, type Link, type LinkKind } from "@/lib/extract/types";
-import { searchNamesOf } from "@/lib/extract/url/domain";
+import { searchNamesOf, siteName } from "@/lib/extract/url/domain";
 import { deriveTitle } from "@/lib/preview/derive-title";
 
 // Row i's text is text.slice(offsets[i], offsets[i + 1] - 1). Rows are joined
@@ -31,7 +31,7 @@ export interface LibraryRows {
   kinds: Uint8Array; // index into LINK_KINDS
   flags: Uint8Array; // SHORTENED | BARE
   domains: Uint32Array; // index into domainNames
-  domainNames: string[];
+  domainNames: string[]; // sites as shown (siteName): twitter.com is x.com
   senders: Uint32Array; // index into senderNames; 0 is no sender
   senderNames: string[];
   sources: Uint32Array; // index into sourceIds
@@ -172,7 +172,7 @@ export class RowsBuilder {
     this.flags.push(
       (link.isShortened ? SHORTENED : 0) | (link.isBare ? BARE : 0),
     );
-    this.domains.push(this.domainTable.indexOf(link.domain));
+    this.domains.push(this.domainTable.indexOf(siteName(link.domain)));
     this.senders.push(this.senderTable.indexOf(link.sender ?? ""));
     this.sources.push(this.sourceTable.indexOf(link.sourceId));
     this.keys.push(this.keyTable.indexOf(link.urlKey));

@@ -51,20 +51,28 @@ function Section({
   onClear: () => void;
   children: ReactNode;
 }) {
-  // The legend stays the fieldset's first child, so it names the group; Clear
-  // sits beside it.
+  // The legend names the group for screen readers. Browsers draw a legend on
+  // the fieldset's top edge, outside its content box, so it can't share a row
+  // with Clear; the row shows the title instead. The fieldset is positioned so
+  // the hidden legend (absolute) stays inside the sidebar's scroll area
+  // rather than stretching the page.
   return (
     <fieldset className="relative flex min-w-0 flex-col gap-1">
-      <legend className="mb-1 font-semibold">{title}</legend>
-      {chosen && (
-        <button
-          type="button"
-          className="absolute top-0 right-0 underline underline-offset-2"
-          onClick={onClear}
-        >
-          {strings.clear}
-        </button>
-      )}
+      <legend className="sr-only">{title}</legend>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span aria-hidden className="font-semibold">
+          {title}
+        </span>
+        {chosen && (
+          <button
+            type="button"
+            className="underline underline-offset-2"
+            onClick={onClear}
+          >
+            {strings.clear}
+          </button>
+        )}
+      </div>
       {children}
     </fieldset>
   );

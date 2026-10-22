@@ -47,6 +47,12 @@ describe("the view as a query string", () => {
   });
 });
 
+test("an address naming twitter.com finds X's links, now shown as x.com", () => {
+  expect(queryFromSearch("?site=twitter.com&site=x.com").sites).toEqual([
+    "x.com",
+  ]);
+});
+
 test("typing changes only the text; anything else is a new history entry", () => {
   const before = query({ text: "lis", sites: ["wikipedia.org"] });
   expect(onlyTextDiffers(before, { ...before, text: "lisbon" })).toBe(true);

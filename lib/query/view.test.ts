@@ -140,7 +140,7 @@ describe("filters and their counts", () => {
     expect(facets.sites.map((v) => [v.value, v.count])).toEqual([
       ["youtube.com", 2],
       ["example.com", 1],
-      ["twitter.com", 1],
+      ["x.com", 1],
     ]);
     expect(facets.kinds.map((v) => [v.value, v.count])).toEqual([
       ["video", 2],
@@ -174,7 +174,7 @@ describe("filters and their counts", () => {
     ).toEqual([
       ["youtube.com", 2, true],
       ["example.com", 1, false],
-      ["twitter.com", 1, false],
+      ["x.com", 1, false],
     ]);
     // Other filters count within the chosen site.
     expect(view.facets.senders.map((v) => [v.value, v.count])).toEqual([
