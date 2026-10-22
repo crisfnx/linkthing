@@ -7,6 +7,7 @@ import type { WorkerErrorCode } from "@/lib/workers/protocol";
 
 const number = new Intl.NumberFormat();
 const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const longDay = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
 
 function count(n: number, one: string, many = `${one}s`): string {
   return `${number.format(n)} ${n === 1 ? one : many}`;
@@ -29,6 +30,16 @@ const KINDS: Record<Source["kind"], string> = {
   netscape: "Bookmarks",
   html: "Web page",
   "telegram-json": "Telegram chat",
+};
+
+// How the dialog offers each way of reading a file whose kind is unsure.
+const READ_AS: Record<Source["kind"], string> = {
+  whatsapp: "As a WhatsApp chat, with dates and senders",
+  plaintext: "As plain text, line by line",
+  markdown: "As Markdown, with link titles",
+  netscape: "As browser bookmarks, with folders",
+  html: "As a web page, with link titles",
+  "telegram-json": "As a Telegram chat, with dates and senders",
 };
 
 export const strings = {
@@ -69,19 +80,52 @@ export const strings = {
   dateRange: (from: number, to: number) => day.formatRange(from, to),
   formatNumber: (n: number) => number.format(n),
   imported: (results: number) =>
-    results === 1 ? "Import finished." : `${results} imports finished.`,
+    results === 0
+      ? "Nothing was imported."
+      : results === 1
+        ? "Import finished."
+        : `${results} imports finished.`,
   cancelled: CANCELLED,
 
   // Errors say what happened and what to do (§7, Copy).
   errors: {
     "zip-without-chat": (label: string) =>
       `Couldn't find a chat in ${label}: there's no .txt inside. Export the chat again and drop the new file.`,
+    "unreadable-zip": (label: string) =>
+      `Couldn't open ${label}: the zip file is damaged or incomplete. Download or export it again, then drop the new file.`,
     "quota-exceeded": () =>
       "Your browser's storage for this site is full, so nothing was saved. Free up space and try again.",
     cancelled: () => CANCELLED,
     unexpected: (label: string) =>
       `Something went wrong importing ${label}, and nothing was saved.`,
   } satisfies Record<WorkerErrorCode, (label: string) => string>,
+  tryAgain: "Try again",
+
+  // The import dialog asks only what the scan couldn't settle (§6.1).
+  dialog: {
+    title: (label: string) => `Before importing ${label}`,
+    duplicate: (at: number, sourceName: string) =>
+      `You imported this file on ${day.format(at)}, as “${sourceName}”. Import it again?`,
+    update: (sourceName: string) =>
+      `This looks like a newer export of “${sourceName}”.`,
+    addTo: (sourceName: string, newLinks: number) =>
+      `Add its new messages to “${sourceName}” (${count(newLinks, "new link")})`,
+    asNewSource: "Import it as a new source",
+    kind: "Parts of this look like a chat export. How should it be read?",
+    readAs: (kind: Source["kind"]) => READ_AS[kind],
+    dateOrder: (written: string | undefined) =>
+      written
+        ? `How are dates written in this chat? Its last message is dated ${written}.`
+        : "How are dates written in this chat?",
+    dayFirst: (at: number | undefined) =>
+      at === undefined ? "Day first" : `Day first: ${longDay.format(at)}`,
+    monthFirst: (at: number | undefined) =>
+      at === undefined ? "Month first" : `Month first: ${longDay.format(at)}`,
+    import: "Import",
+    importAgain: "Import again",
+    addToSource: (sourceName: string) => `Add to “${sourceName}”`,
+    skip: "Don't import",
+  },
 
   sourcesHeading: "Your sources",
   sourceKind: (kind: Source["kind"]) => KINDS[kind],

@@ -56,6 +56,16 @@ describe("prepareFile", () => {
       new InputError("zip-without-chat"),
     );
   });
+
+  test("a damaged zip is an error of its own", () => {
+    const zip = zipSync({
+      "_chat.txt": strToU8("25/05/2023, 19:48 - Sam: hi"),
+    });
+    const cut = zip.slice(0, zip.length - 30); // as from an interrupted download
+    expect(() => prepareFile(cut, "WhatsApp Chat - Me.zip")).toThrow(
+      new InputError("unreadable-zip"),
+    );
+  });
 });
 
 test("preparePaste normalizes line endings", () => {

@@ -41,6 +41,9 @@ export interface ScanResult {
   // Ambiguous when every date fits both, and the dialog asks.
   dateOrder?: DateOrder;
   dateOrderAmbiguous: boolean;
+  // When it is: the chat's last date as written, read both ways (local
+  // midnight), for the dialog to show.
+  dateSample?: { written: string; dayFirst: number; monthFirst: number };
   duplicateOf?: DuplicateOf;
   updateCandidate?: UpdateCandidate;
   questions: Question[];
@@ -61,7 +64,7 @@ const UPDATE_OVERLAP = 0.5;
 
 // The kind the import will use, or offer when detection is unsure (§3), so
 // the scan can answer for it too.
-function likelyKind(detection: Detection): SourceKind {
+export function likelyKind(detection: Detection): SourceKind {
   if (!detection.needsConfirmation) return detection.kind;
   const offered = detection.scores.find((s) => s.kind !== "plaintext");
   return offered?.kind ?? detection.kind;
@@ -188,9 +191,18 @@ export async function scanInput(
   if (prepared.chatName !== undefined) result.chatName = prepared.chatName;
 
   if (kind === "whatsapp") {
-    const { dateOrder } = scanWhatsApp(text);
+    const { dateOrder, lastDate } = scanWhatsApp(text);
     if (dateOrder) result.dateOrder = dateOrder;
     else result.dateOrderAmbiguous = true;
+    if (lastDate) {
+      const { written, a, b, c } = lastDate;
+      const year = c < 100 ? 2000 + c : c;
+      result.dateSample = {
+        written,
+        dayFirst: new Date(year, b - 1, a).getTime(),
+        monthFirst: new Date(year, a - 1, b).getTime(),
+      };
+    }
   }
 
   await checkpoint(signal);

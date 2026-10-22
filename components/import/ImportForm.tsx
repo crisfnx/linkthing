@@ -1,27 +1,34 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type Ref } from "react";
 import { strings } from "@/lib/strings";
 
 interface Props {
-  disabled: boolean;
+  busy: boolean;
   onFiles: (files: File[]) => void;
   onText: (text: string) => void;
+  // The "Choose files" button, where focus goes back after an import.
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const button =
-  "rounded-md border border-current px-3 py-1.5 font-medium disabled:opacity-50";
+  "rounded-md border border-current px-3 py-1.5 font-medium aria-disabled:opacity-50";
 
 // The ways in besides dropping (§6.1): a file picker, a paste box and the
 // clipboard. The paste box is uncontrolled, so a 10 MB paste isn't copied
 // into React state on every change.
-export function ImportForm({ disabled, onFiles, onText }: Props) {
+//
+// While an import runs, the controls are marked aria-disabled rather than
+// disabled: a disabled button loses focus, and with it the keyboard user's
+// place on the page. Input that arrives meanwhile is ignored.
+export function ImportForm({ busy, onFiles, onText, ref }: Props) {
   const files = useRef<HTMLInputElement>(null);
   const [clipboardFailed, setClipboardFailed] = useState(false);
   const pasteId = useId();
   const hintId = useId();
 
   async function pasteFromClipboard() {
+    if (busy) return;
     try {
       const text = await navigator.clipboard.readText();
       setClipboardFailed(false);
@@ -35,11 +42,14 @@ export function ImportForm({ disabled, onFiles, onText }: Props) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-start gap-1">
         <button
+          ref={ref}
           type="button"
           className={button}
-          disabled={disabled}
+          aria-disabled={busy}
           aria-describedby={hintId}
-          onClick={() => files.current?.click()}
+          onClick={() => {
+            if (!busy) files.current?.click();
+          }}
         >
           {strings.chooseFiles}
         </button>
@@ -62,7 +72,9 @@ export function ImportForm({ disabled, onFiles, onText }: Props) {
 
       <form
         className="flex flex-col gap-2"
-        action={(data) => onText(String(data.get("text") ?? ""))}
+        action={(data) => {
+          if (!busy) onText(String(data.get("text") ?? ""));
+        }}
       >
         <label htmlFor={pasteId} className="font-medium">
           {strings.pasteLabel}
@@ -71,17 +83,17 @@ export function ImportForm({ disabled, onFiles, onText }: Props) {
           id={pasteId}
           name="text"
           rows={6}
-          disabled={disabled}
+          readOnly={busy}
           className="rounded-md border border-current/40 bg-transparent p-2 font-mono text-sm"
         />
         <div className="flex flex-wrap gap-2">
-          <button type="submit" className={button} disabled={disabled}>
+          <button type="submit" className={button} aria-disabled={busy}>
             {strings.importText}
           </button>
           <button
             type="button"
             className={button}
-            disabled={disabled}
+            aria-disabled={busy}
             onClick={pasteFromClipboard}
           >
             {strings.pasteFromClipboard}

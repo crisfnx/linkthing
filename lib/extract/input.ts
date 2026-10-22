@@ -11,7 +11,7 @@ export interface PreparedInput {
 }
 
 export class InputError extends Error {
-  constructor(readonly code: "zip-without-chat") {
+  constructor(readonly code: "zip-without-chat" | "unreadable-zip") {
     super(code);
     this.name = "InputError";
   }
@@ -42,7 +42,13 @@ function isChatText(path: string): boolean {
 // iPhone exports are always zipped, with the chat in _chat.txt; Android
 // exports with media zip a "WhatsApp Chat with … .txt". Media isn't inflated.
 function unzipChat(bytes: Uint8Array): { bytes: Uint8Array; path: string } {
-  const files = unzipSync(bytes, { filter: (file) => isChatText(file.name) });
+  let files: Record<string, Uint8Array>;
+  try {
+    files = unzipSync(bytes, { filter: (file) => isChatText(file.name) });
+  } catch {
+    // Damaged or cut short, often by an interrupted download.
+    throw new InputError("unreadable-zip");
+  }
   const paths = Object.keys(files);
   const path = paths.find((p) => baseName(p) === "_chat.txt") ?? paths[0];
   const content = path === undefined ? undefined : files[path];

@@ -70,8 +70,12 @@ export function createHandler({ db, post }: WorkerContext) {
       case "scan":
         scanned = undefined;
         return run(id, async (options) => {
-          scanned = await scanInput(db, request.input, options);
-          return { id, type: "scanned", scan: scanned.result };
+          const scan = await scanInput(db, request.input, options);
+          // A cancel that came after the scan's last check: nothing was
+          // written, so it still counts.
+          options.signal?.throwIfAborted();
+          scanned = scan;
+          return { id, type: "scanned", scan: scan.result };
         });
       case "start": {
         // Used once: trying again after a failure starts from a new scan,

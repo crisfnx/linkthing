@@ -1,19 +1,29 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useImport, type Decide, type ImportState } from "@/hooks/useImport";
+import type { ImportChoice } from "@/lib/import/save";
+import type { ScanResult } from "@/lib/import/scan";
 import { strings } from "@/lib/strings";
 import type { ExtractClient } from "@/lib/workers/client";
+import type { WorkerErrorCode } from "@/lib/workers/protocol";
 import { DropZone } from "./DropZone";
+import { ImportDialog } from "./ImportDialog";
 import { ImportForm } from "./ImportForm";
 import { ImportProgress } from "./ImportProgress";
 import { ImportSummary } from "./ImportSummary";
 
 interface Props {
   connect?: () => ExtractClient;
-  decide?: Decide;
   children?: ReactNode;
 }
+
+// Failures that may not happen twice. A zip without a chat, or a damaged
+// one, fails the same way again: its message says what to do instead.
+const RETRYABLE: ReadonlySet<WorkerErrorCode> = new Set([
+  "quota-exceeded",
+  "unexpected",
+]);
 
 // What a screen reader hears: each phase as it starts, then the outcome.
 function announcement(state: ImportState): string {
@@ -31,13 +41,38 @@ function announcement(state: ImportState): string {
 
 // The first screen (M2): drop, pick or paste, watch the progress, read the
 // summary. Browsing the links arrives with M3.
-export function Importer({ connect, decide, children }: Props) {
-  const { state, importFiles, importText, cancel } = useImport({
+export function Importer({ connect, children }: Props) {
+  // The question the dialog is asking, and where its answer goes.
+  const [asking, setAsking] = useState<{
+    scan: ScanResult;
+    answer: (choice: ImportChoice | null) => void;
+  } | null>(null);
+  const decide: Decide = (scan) =>
+    scan.questions.length === 0
+      ? {}
+      : new Promise((answer) => setAsking({ scan, answer }));
+
+  const { state, importFiles, importText, cancel, retry } = useImport({
     connect,
     decide,
   });
   const running = state.status === "running";
   const results = "results" in state ? state.results : [];
+
+  // The Cancel button goes with the progress bar. If it had focus, put focus
+  // back on "Choose files" rather than leave the keyboard user nowhere.
+  const chooseFiles = useRef<HTMLButtonElement>(null);
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (
+      wasRunning.current &&
+      !running &&
+      document.activeElement === document.body
+    ) {
+      chooseFiles.current?.focus();
+    }
+    wasRunning.current = running;
+  }, [running]);
 
   return (
     <DropZone disabled={running} onFiles={importFiles} onText={importText}>
@@ -49,7 +84,8 @@ export function Importer({ connect, decide, children }: Props) {
         </header>
 
         <ImportForm
-          disabled={running}
+          ref={chooseFiles}
+          busy={running}
           onFiles={importFiles}
           onText={importText}
         />
@@ -65,12 +101,35 @@ export function Importer({ connect, decide, children }: Props) {
             onCancel={cancel}
           />
         )}
+        {asking && (
+          <ImportDialog
+            scan={asking.scan}
+            onDecide={(choice) => {
+              setAsking(null);
+              asking.answer(choice);
+            }}
+          />
+        )}
         {state.status === "cancelled" && <p>{strings.cancelled}</p>}
+        {state.status === "done" && state.results.length === 0 && (
+          <p>{strings.imported(0)}</p>
+        )}
         {state.status === "failed" && (
           <div role="alert" className="flex flex-col gap-1">
             <p>{strings.errors[state.code](state.label)}</p>
             {state.code === "unexpected" && (
               <p className="font-mono text-sm opacity-70">{state.message}</p>
+            )}
+            {RETRYABLE.has(state.code) && (
+              <div>
+                <button
+                  type="button"
+                  className="rounded-md border border-current px-3 py-1.5 font-medium"
+                  onClick={retry}
+                >
+                  {strings.tryAgain}
+                </button>
+              </div>
             )}
           </div>
         )}

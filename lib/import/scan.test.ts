@@ -131,6 +131,20 @@ describe("what the scan reads", () => {
     expect(hashes.size).toBe(1);
   });
 
+  test("ambiguous dates come with the last one, read both ways", async () => {
+    const { result } = await scanInput(
+      freshDb(),
+      dropped("whatsapp-ambiguous-dates.txt"),
+    );
+    expect(result.dateSample).toEqual({
+      written: "11/06/2024",
+      dayFirst: new Date(2024, 5, 11).getTime(),
+      monthFirst: new Date(2024, 10, 6).getTime(),
+    });
+    const settled = await scanInput(freshDb(), dropped("whatsapp-de.txt"));
+    expect(settled.result.dateSample).toBeUndefined();
+  });
+
   test("pasted text has no file name", async () => {
     const { text, result } = await scanInput(freshDb(), {
       text: "Read later: https://example.com/a\r\n",
