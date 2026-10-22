@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Link } from "@/lib/extract/types";
 import { describeUrl } from "@/lib/extract/url/describe";
 import { RowsBuilder, type LibraryRows } from "@/lib/library/rows";
+import { buildView, EMPTY_QUERY } from "@/lib/query/view";
 import { LinkList } from "./LinkList";
 
 // jsdom lays nothing out: give the list's container a screenful (10 rows),
@@ -58,16 +59,30 @@ const names = new Map([
 
 const items = () => screen.getAllByRole("listitem");
 
+// Every row, in order, nothing collapsed: the list as the view gives it with
+// no search or filters.
+function List({ rows }: { rows: LibraryRows }) {
+  return (
+    <LinkList
+      rows={rows}
+      order={Uint32Array.from({ length: rows.count }, (_, i) => i)}
+      copies={null}
+      openKeys={new Set()}
+      onToggleCopies={() => {}}
+      sourceNames={names}
+    />
+  );
+}
+
 test("a row: its title links to the page, then the URL, kind and date", () => {
   const at = new Date(2026, 2, 14, 21, 3).getTime();
   render(
-    <LinkList
+    <List
       rows={rowsOf([
         link("https://x.com/exampledev/status/1900000000000000001?s=20", {
           timestamp: at,
         }),
       ])}
-      sourceNames={names}
     />,
   );
   const row = items()[0]!;
@@ -89,12 +104,7 @@ test("a row: its title links to the page, then the URL, kind and date", () => {
 });
 
 test("with no readable title, the URL is the title and the site follows", () => {
-  render(
-    <LinkList
-      rows={rowsOf([link("https://bit.ly/ex4mpleCP")])}
-      sourceNames={names}
-    />,
-  );
+  render(<List rows={rowsOf([link("https://bit.ly/ex4mpleCP")])} />);
   const row = items()[0]!;
   expect(within(row).getByRole("link").textContent).toBe(
     "bit.ly/ex4mpleCP, opens in a new tab",
@@ -108,7 +118,7 @@ test("senders and sources show only when there's more than one", () => {
     link("https://example.com/a-page", { sender: "Cris", timestamp: 2 }),
     link("https://example.com/b-page", { sender: "Cris", timestamp: 1 }),
   ]);
-  const { unmount } = render(<LinkList rows={single} sourceNames={names} />);
+  const { unmount } = render(<List rows={single} />);
   expect(items()[0]!.textContent).not.toContain("Cris");
   expect(items()[0]!.textContent).not.toContain("Chat with Me");
   unmount();
@@ -124,7 +134,7 @@ test("senders and sources show only when there's more than one", () => {
     ],
     ["chat", "notes"],
   );
-  render(<LinkList rows={mixed} sourceNames={names} />);
+  render(<List rows={mixed} />);
   expect(items()[0]!.textContent).toContain(
     "example.com/a-page · Ana · Chat with Me",
   );
@@ -132,7 +142,7 @@ test("senders and sources show only when there's more than one", () => {
 });
 
 test("only the rows on screen are drawn, and the list says how many in all", () => {
-  render(<LinkList rows={pages(10_000)} sourceNames={names} />);
+  render(<List rows={pages(10_000)} />);
   const drawn = items();
   expect(drawn.length).toBeGreaterThan(9);
   expect(drawn.length).toBeLessThan(30);
@@ -141,7 +151,7 @@ test("only the rows on screen are drawn, and the list says how many in all", () 
 });
 
 test("one row is in the tab order; j and k move between rows", () => {
-  render(<LinkList rows={pages(50)} sourceNames={names} />);
+  render(<List rows={pages(50)} />);
   const links = screen.getAllByRole("link");
   expect(links.filter((a) => a.tabIndex === 0)).toEqual([links[0]]);
 
@@ -158,7 +168,7 @@ test("one row is in the tab order; j and k move between rows", () => {
 });
 
 test("End jumps to the last row, drawing it, and Home back to the first", () => {
-  render(<LinkList rows={pages(5_000)} sourceNames={names} />);
+  render(<List rows={pages(5_000)} />);
   screen.getAllByRole("link")[0]!.focus();
 
   fireEvent.keyDown(document.activeElement!, { key: "End" });
@@ -168,9 +178,62 @@ test("End jumps to the last row, drawing it, and Home back to the first", () => 
 });
 
 test("keys with a modifier are left to the browser", () => {
-  render(<LinkList rows={pages(20)} sourceNames={names} />);
+  render(<List rows={pages(20)} />);
   const first = screen.getAllByRole("link")[0]!;
   first.focus();
   fireEvent.keyDown(first, { key: "ArrowDown", metaKey: true });
   expect(document.activeElement).toBe(first);
+});
+
+test("a link shared more than once says how often, and opens to its copies", () => {
+  const rows = rowsOf([
+    link("https://youtu.be/Ex4mpLeV1d0", { timestamp: 3 }),
+    link("https://example.com/a-page", { timestamp: 2 }),
+    link("https://www.youtube.com/watch?v=Ex4mpLeV1d0", { timestamp: 1 }),
+  ]);
+  const toggle = vi.fn();
+  const props = {
+    rows,
+    onToggleCopies: toggle,
+    sourceNames: names,
+  };
+  const key = rows.keys[0]!;
+  const closed = buildView(rows, { ...EMPTY_QUERY, dedupe: true });
+  const { rerender } = render(
+    <LinkList
+      {...props}
+      order={closed.order}
+      copies={closed.copies}
+      openKeys={new Set()}
+    />,
+  );
+  expect(items()).toHaveLength(2);
+  const badge = screen.getByRole("button", {
+    name: "Shared 2 times: show all",
+  });
+  expect(badge.textContent).toBe("×2");
+  expect(badge.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(badge);
+  expect(toggle).toHaveBeenCalledWith(key);
+
+  const opened = buildView(
+    rows,
+    { ...EMPTY_QUERY, dedupe: true },
+    new Set([key]),
+  );
+  rerender(
+    <LinkList
+      {...props}
+      order={opened.order}
+      copies={opened.copies}
+      openKeys={new Set([key])}
+    />,
+  );
+  expect(items()).toHaveLength(3);
+  expect(items()[1]!.textContent).toContain("youtube.com/watch?v=Ex4mpLeV1d0");
+  expect(
+    screen
+      .getByRole("button", { name: "Shared 2 times: hide the others" })
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
 });

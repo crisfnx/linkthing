@@ -7,8 +7,7 @@ import { useExtractClient } from "@/hooks/useExtractClient";
 import { useLibrary } from "@/hooks/useLibrary";
 import { createDb } from "@/lib/db/schema";
 import { strings } from "@/lib/strings";
-import { LibrarySummary } from "./LibrarySummary";
-import { LinkList } from "./LinkList";
+import { LibraryView } from "./LibraryView";
 
 // Everything that needs the browser: IndexedDB and the worker (§8.2). Loaded
 // by WorkspaceLoader, so it never renders on the server.
@@ -53,9 +52,11 @@ export default function Workspace() {
         >
           {hasSources && (
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="px-4 py-2 text-sm text-foreground/65">
-                <LibrarySummary library={library} />
-              </div>
+              {library.status === "failed" && (
+                <p role="alert" className="px-4 py-2">
+                  {strings.libraryFailed(library.message)}
+                </p>
+              )}
               {library.status === "loading" && (
                 <p className="px-4 py-2">{strings.libraryLoading}</p>
               )}
@@ -63,7 +64,7 @@ export default function Workspace() {
                 (library.rows.count === 0 ? (
                   <p className="px-4 py-2">{strings.libraryHasNoLinks}</p>
                 ) : (
-                  <LinkList rows={library.rows} sourceNames={sourceNames} />
+                  <LibraryView rows={library.rows} sourceNames={sourceNames} />
                 ))}
             </div>
           )}

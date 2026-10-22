@@ -10,7 +10,7 @@
 // copied.
 import type { LinkVaultDb } from "@/lib/db/schema";
 import { LINK_KINDS, type Link, type LinkKind } from "@/lib/extract/types";
-import { aliasesOf } from "@/lib/extract/url/domain";
+import { searchNamesOf } from "@/lib/extract/url/domain";
 import { deriveTitle } from "@/lib/preview/derive-title";
 
 // Row i's text is text.slice(offsets[i], offsets[i + 1] - 1). Rows are joined
@@ -136,7 +136,7 @@ export class RowsBuilder {
   private readonly senderTable = new Table([""]);
   private readonly sourceTable: Table;
   private readonly keyTable = new Table();
-  private readonly aliases = new Map<string, string>();
+  private readonly names = new Map<string, string>();
 
   constructor(sourceIds: readonly string[] = []) {
     this.sourceTable = new Table(sourceIds);
@@ -144,10 +144,11 @@ export class RowsBuilder {
 
   add(link: Link): void {
     const title = deriveTitle(link) ?? "";
-    let aliases = this.aliases.get(link.domain);
-    if (aliases === undefined) {
-      aliases = aliasesOf(link.domain).join(" ");
-      this.aliases.set(link.domain, aliases);
+    // Per host, since Wikipedia's names depend on the language's host.
+    let names = this.names.get(link.host);
+    if (names === undefined) {
+      names = searchNamesOf(link.domain, link.host).join(" ");
+      this.names.set(link.host, names);
     }
     this.ids.push(link.id);
     this.titles.push(title);
@@ -162,7 +163,7 @@ export class RowsBuilder {
           link.context,
           link.nearby,
           link.sender,
-          aliases,
+          names,
         ].join(" "),
       ),
     );

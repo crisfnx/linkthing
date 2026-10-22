@@ -1,14 +1,7 @@
 import "fake-indexeddb/auto";
-import {
-  act,
-  render,
-  renderHook,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, expect, test, vi } from "vitest";
-import { LibrarySummary } from "@/components/library/LibrarySummary";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { describeUrl } from "@/lib/extract/url/describe";
 import { RowsBuilder, type LibraryRows } from "@/lib/library/rows";
@@ -145,23 +138,10 @@ test("a failed read says so", async () => {
   const client = fakeClient(() => Promise.reject(new Error("disk on fire")));
   const { result } = renderHook(() => useLibrary(db, () => client));
   await waitFor(() => expect(result.current.status).toBe("failed"));
-
-  render(<LibrarySummary library={result.current} />);
-  expect(screen.getByRole("alert").textContent).toBe(
-    "Couldn't read your library (disk on fire). Reload the page to try again.",
-  );
-});
-
-test("the summary: links, distinct links and sites", () => {
-  const rows = rowsOf(
-    "https://youtu.be/Ex4mpLeV1d0",
-    "https://www.youtube.com/watch?v=Ex4mpLeV1d0",
-    "https://example.com/a",
-  );
-  render(<LibrarySummary library={{ status: "ready", rows }} />);
-  expect(
-    screen.getByText("3 links in your library: 2 unique, from 2 sites."),
-  ).toBeTruthy();
+  expect(result.current).toEqual({
+    status: "failed",
+    message: "disk on fire",
+  });
 });
 
 test("the page's worker starts when first asked for, once, and stops with the page", () => {
