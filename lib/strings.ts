@@ -195,6 +195,35 @@ export const strings = {
       ? `Shared ${count(n, "time")}: hide the others`
       : `Shared ${count(n, "time")}: show all`,
 
+  // The details drawer (§6.2).
+  details: {
+    label: (title: string) => `Details: ${title}`,
+    close: "Close",
+    open: "Open link",
+    copy: "Copy link",
+    star: "Star",
+    starred: "Starred",
+    tier0: (kind: string, site: string) => `${kind} on ${site}`,
+    link: "Link",
+    removed: (names: string[]) => `Tracking taken out: ${names.join(", ")}`,
+    asFound: "As found",
+    bare: "Found without https://, which was added.",
+    shortened: "A short link: it forwards to another page.",
+    message: "In the message",
+    nearby: "Nearby",
+    sentBy: "Sent by",
+    date: "Date",
+    source: "Source",
+    sourceLine: (name: string, line: number) =>
+      `${name}, line ${number.format(line)}`,
+    kind: "Kind",
+    keys: "o opens, c copies, s stars, Esc closes",
+  },
+  copied: "Link copied.",
+  copyFailed: "Couldn't copy the link: the browser didn't allow it.",
+  starredNotice: "Starred.",
+  unstarredNotice: "Star removed.",
+
   libraryLoading: "Reading your library…",
   libraryHasNoLinks: "No links yet: what you imported had none.",
   linksLabel: "Links",
@@ -209,7 +238,6 @@ export const strings = {
   } satisfies Record<LinkKind, string>,
   linkDate: (at: number) => day.format(at),
   linkDateAndTime: (at: number) => dayAndTime.format(at),
-  opensInNewTab: "opens in a new tab",
   libraryFailed: (message: string) =>
     `Couldn't read your library (${message}). Reload the page to try again.`,
 

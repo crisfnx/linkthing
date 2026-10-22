@@ -36,6 +36,7 @@ interface RowProps {
   linkRef?: Ref<HTMLAnchorElement>;
   onActivate: (position: number) => void;
   onToggleCopies: (row: number) => void;
+  onOpen: (row: number) => void; // the details drawer
 }
 
 // One link: a site badge (favicons arrive with M7), the title, or the URL
@@ -57,6 +58,7 @@ function LinkRow({
   linkRef,
   onActivate,
   onToggleCopies,
+  onOpen,
 }: RowProps) {
   const url = textAt(rows.urls, row);
   const shown = displayUrl(url);
@@ -91,11 +93,24 @@ function LinkRow({
           target="_blank"
           rel="noopener noreferrer"
           tabIndex={active ? 0 : -1}
+          aria-haspopup="dialog"
           onFocus={() => onActivate(position)}
+          onClick={(event) => {
+            // A plain click or Enter opens the details; with a modifier or
+            // the middle button it stays a link, opening a new tab (§6.2).
+            const plain = !(
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            );
+            if (event.button !== 0 || !plain) return;
+            event.preventDefault();
+            onOpen(row);
+          }}
           className="block truncate rounded-sm font-medium hover:underline"
         >
           {title || shown}
-          <span className="sr-only">, {strings.opensInNewTab}</span>
         </a>
         <p className="flex items-center gap-1.5 text-sm text-foreground/65">
           <KindIcon kind={kind} className="size-3.5 shrink-0" />
@@ -136,6 +151,12 @@ interface Props {
   openKeys: ReadonlySet<number>; // keys whose copies are shown
   onToggleCopies: (key: number) => void;
   sourceNames: ReadonlyMap<string, string>;
+  // The focused row: Enter or a click opens it, o opens the link, c copies
+  // it, s stars it (§7).
+  onOpen: (row: number) => void;
+  onOpenLink: (row: number) => void;
+  onCopy: (row: number) => void;
+  onStar: (row: number) => void;
 }
 
 // The list view (§6.2): only the rows on screen are drawn, so 50 k links
@@ -148,6 +169,10 @@ export function LinkList({
   openKeys,
   onToggleCopies,
   sourceNames,
+  onOpen,
+  onOpenLink,
+  onCopy,
+  onStar,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   // useVirtualizer returns functions the React Compiler can't memoize without
@@ -187,6 +212,17 @@ export function LinkList({
       PageDown: current + page,
       PageUp: current - page,
     };
+    const actions: Record<string, (row: number) => void> = {
+      o: onOpenLink,
+      c: onCopy,
+      s: onStar,
+    };
+    const action = actions[event.key];
+    if (action && count > 0) {
+      event.preventDefault();
+      action(order[current]!);
+      return;
+    }
     const to = targets[event.key];
     if (to === undefined) return;
     event.preventDefault();
@@ -240,6 +276,7 @@ export function LinkList({
               }
               onActivate={setActive}
               onToggleCopies={(r) => onToggleCopies(rows.keys[r]!)}
+              onOpen={onOpen}
             />
           );
         })}

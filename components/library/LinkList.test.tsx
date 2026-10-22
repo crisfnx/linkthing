@@ -59,6 +59,13 @@ const names = new Map([
 
 const items = () => screen.getAllByRole("listitem");
 
+const noActions = {
+  onOpen: () => {},
+  onOpenLink: () => {},
+  onCopy: () => {},
+  onStar: () => {},
+};
+
 // Every row, in order, nothing collapsed: the list as the view gives it with
 // no search or filters.
 function List({ rows }: { rows: LibraryRows }) {
@@ -70,6 +77,7 @@ function List({ rows }: { rows: LibraryRows }) {
       openKeys={new Set()}
       onToggleCopies={() => {}}
       sourceNames={names}
+      {...noActions}
     />
   );
 }
@@ -87,7 +95,7 @@ test("a row: its title links to the page, then the URL, kind and date", () => {
   );
   const row = items()[0]!;
   const anchor = within(row).getByRole("link");
-  expect(anchor.textContent).toBe("Post by @exampledev, opens in a new tab");
+  expect(anchor.textContent).toBe("Post by @exampledev");
   expect(anchor.getAttribute("href")).toBe(
     "https://x.com/exampledev/status/1900000000000000001",
   );
@@ -106,9 +114,7 @@ test("a row: its title links to the page, then the URL, kind and date", () => {
 test("with no readable title, the URL is the title and the site follows", () => {
   render(<List rows={rowsOf([link("https://bit.ly/ex4mpleCP")])} />);
   const row = items()[0]!;
-  expect(within(row).getByRole("link").textContent).toBe(
-    "bit.ly/ex4mpleCP, opens in a new tab",
-  );
+  expect(within(row).getByRole("link").textContent).toBe("bit.ly/ex4mpleCP");
   expect(row.textContent).toContain("Web page: bit.ly");
   expect(row.querySelector("time")).toBeNull(); // undated
 });
@@ -196,6 +202,7 @@ test("a link shared more than once says how often, and opens to its copies", () 
     rows,
     onToggleCopies: toggle,
     sourceNames: names,
+    ...noActions,
   };
   const key = rows.keys[0]!;
   const closed = buildView(rows, { ...EMPTY_QUERY, dedupe: true });
@@ -236,4 +243,56 @@ test("a link shared more than once says how often, and opens to its copies", () 
       .getByRole("button", { name: "Shared 2 times: hide the others" })
       .getAttribute("aria-expanded"),
   ).toBe("true");
+});
+
+test("a plain click opens the details; with a modifier it stays a link", () => {
+  const rows = pages(3);
+  const onOpen = vi.fn();
+  render(
+    <LinkList
+      rows={rows}
+      order={Uint32Array.from([0, 1, 2])}
+      copies={null}
+      openKeys={new Set()}
+      onToggleCopies={() => {}}
+      sourceNames={names}
+      {...noActions}
+      onOpen={onOpen}
+    />,
+  );
+  const second = screen.getAllByRole("link")[1]!;
+  expect(second.getAttribute("aria-haspopup")).toBe("dialog");
+
+  expect(fireEvent.click(second)).toBe(false); // default prevented
+  expect(onOpen).toHaveBeenCalledWith(1);
+
+  expect(fireEvent.click(second, { metaKey: true })).toBe(true);
+  expect(fireEvent.click(second, { button: 1 })).toBe(true);
+  expect(onOpen).toHaveBeenCalledOnce();
+});
+
+test("o, c and s act on the focused row", () => {
+  const rows = pages(3);
+  const actions = { onOpenLink: vi.fn(), onCopy: vi.fn(), onStar: vi.fn() };
+  render(
+    <LinkList
+      rows={rows}
+      order={Uint32Array.from([2, 1, 0])} // shown oldest first
+      copies={null}
+      openKeys={new Set()}
+      onToggleCopies={() => {}}
+      sourceNames={names}
+      {...noActions}
+      {...actions}
+    />,
+  );
+  const first = screen.getAllByRole("link")[0]!;
+  first.focus();
+  fireEvent.keyDown(first, { key: "j" });
+  for (const key of ["o", "c", "s"]) {
+    fireEvent.keyDown(document.activeElement!, { key });
+  }
+  expect(actions.onOpenLink).toHaveBeenCalledWith(1);
+  expect(actions.onCopy).toHaveBeenCalledWith(1);
+  expect(actions.onStar).toHaveBeenCalledWith(1);
 });

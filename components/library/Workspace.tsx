@@ -64,7 +64,11 @@ export default function Workspace() {
                 (library.rows.count === 0 ? (
                   <p className="px-4 py-2">{strings.libraryHasNoLinks}</p>
                 ) : (
-                  <LibraryView rows={library.rows} sourceNames={sourceNames} />
+                  <LibraryView
+                    db={db}
+                    rows={library.rows}
+                    sourceNames={sourceNames}
+                  />
                 ))}
             </div>
           )}
