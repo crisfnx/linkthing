@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 22 October 2026 (v2.13: M2 save pass; see Document history) |
+| **Updated** | 22 October 2026 (v2.14: M2 first screen; see Document history) |
 | **Status** | Planning / pre-development |
 
 ---
@@ -635,8 +635,9 @@ app/
   api/classify/route.ts      Phase 3: hosted AI mode (§8.9), once accounts exist
 components/
   ui/                        shadcn-style primitives
-  import/                    DropZone, PasteBox, ImportDialog, ImportProgress
-  library/                   WorkspaceLoader (client; loads Workspace with ssr:false), Workspace, Toolbar, SearchBox, FacetSidebar, LinkList, LinkRow,
+  import/                    Importer (the first screen), DropZone (the whole page), ImportForm (file picker, paste box, clipboard),
+                             ImportProgress, ImportSummary, ImportDialog
+  library/                   WorkspaceLoader (client; loads Workspace with ssr:false), Workspace, SourceList (M2), Toolbar, SearchBox, FacetSidebar, LinkList, LinkRow,
                              DomainGroups, CompactList, CardGrid, PreviewCard, DetailsDrawer, StatsPanel, EmptyState
   export/                    ExportDialog
   settings/                  SettingsDialog
@@ -661,6 +662,7 @@ lib/
     types.ts                 persisted records (§5); Link and Message stay in extract/types.ts
     schema.ts                Dexie instance + versions
     raw.ts                   gzip and gunzip of SourcePart.raw (CompressionStream)
+  strings.ts                 every string the UI shows (§10)
     repos/                   sources.ts (+ parts, chat updates), links.ts, annotations.ts, settings.ts (+ meta)
     rekey.ts                 canonicalizer-version migration: merges, splits, orphans (§4.4)
     backup.ts                export/import JSON with zod
@@ -702,7 +704,7 @@ docs/
 
 | Scenario | Target |
 |---|---|
-| 10 MB / 150 k-line WhatsApp export, M-series laptop | parsed and saved in < 3 s; main thread never blocked > 50 ms. M1 measured the extraction alone (in Node, no save): a synthetic 10 MB export, 130 k messages and 98 k links, in about 0.8 s; the owner's real 0.5 MB export end to end (unzip to links) in 66 ms |
+| 10 MB / 150 k-line WhatsApp export, M-series laptop | parsed and saved in < 3 s; main thread never blocked > 50 ms. M1 measured the extraction alone (in Node, no save): a synthetic 10 MB export, 130 k messages and 98 k links, in about 0.8 s; the owner's real 0.5 MB export end to end (unzip to links) in 66 ms. M2 measured the whole import in headless Chrome (production build): the same synthetic export, 97,897 links, in 5.3 s, of which 4.4 s is the save (about 22,000 links a second into IndexedDB; chunks of 10,000 instead of 1,000 change nothing); no long tasks on the main thread, at most 42 ms between 10 ms heartbeats. **Over budget**: the save is bound by IndexedDB's per-record cost, so meeting 3 s needs a different storage shape or a revised budget (open, m2-finish) |
 | 50 k links in the library | search keystroke → results in < 100 ms; scroll at 60 fps |
 | First load, main route | < 200 kB gzipped JS before the workspace chunk; workspace lazy-loaded |
 | Lighthouse | ≥ 95 performance and accessibility on the empty state |
@@ -820,7 +822,7 @@ Later, in Phase 4: a small embedding model running in the browser (transformers.
 - Browser support as per Next.js 16: Chrome / Edge / Firefox 111+, Safari 16.4+.
 - Responsive from 360 px to ultrawide.
 - All user-visible dates via `Intl.DateTimeFormat` in the user's locale; time zone: browser local (WhatsApp exports carry no zone).
-- English UI only in the MVP; strings kept in one module so i18n is a later mechanical change.
+- English UI only in the MVP; strings kept in one module (`lib/strings.ts`) so i18n is a later mechanical change.
 
 ---
 
@@ -1172,3 +1174,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 22 Oct 2026 | v2.11: M1 complete. Pipeline from bytes to links (`input.ts`, `pipeline.ts`): zip handling, chat name from the file name, context and nearby rules spelled out, column semantics, stats from link timestamps; nearby measured on the owner's exports (2 % of bare links in the chat with yourself, so M7 previews carry the meaning); extraction timings in §8.6 |
 | 22 Oct 2026 | v2.12: M2 scan pass (`lib/import/scan.ts`). Updates are matched by link ids, read from the `sourceId` index, rather than by stored message keys, which would mean reading every link (§6.1); the scan returns its questions as a list and answers for the adapter the dialog offers when detection is unsure; a duplicate file is not also offered as an update; scan protocol and errors (§8.2); `lib/import/` in the file structure, two synthetic fixtures for the dialog's questions (§8.4) |
 | 22 Oct 2026 | v2.13: M2 save pass (`lib/import/save.ts`). An update adds only links whose ids are new and leaves stored ones alone, rather than rewriting them; it parses the stored parts too, merged by message key, so its stats are exact (§6.1, §8.2); cancel is checked before each chunk and before the commit; start, progress, done and cancel messages and the error codes (§8.2); Replace for non-chat sources moves to M4 (owner's decision), with an acceptance criterion (§6.1, §11, §12) |
+| 22 Oct 2026 | v2.14: M2 first screen (`components/import/`, `hooks/useImport.ts`, `lib/strings.ts`): drop anywhere, file picker, paste box and clipboard, phase progress with cancel, result summary, source list. A 10 MB import measured in headless Chrome at 5.3 s, over the 3 s budget because of IndexedDB's per-record cost; the main thread stays free (§8.6) |

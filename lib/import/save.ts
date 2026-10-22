@@ -20,8 +20,11 @@ export interface ImportChoice {
   updateOf?: string; // the source id of the scan's updateCandidate
 }
 
+// What the result summary shows (§6.1).
 export interface Imported {
   sourceId: string;
+  name: string;
+  updated: boolean; // a newer export added to a chat already stored
   stats: SourceStats; // the whole source's, after an update too
   newLinks: number; // links written: all of them, or an update's new ones
 }
@@ -152,5 +155,11 @@ export async function saveImport(
     signal?.throwIfAborted();
   });
 
-  return { sourceId, stats, newLinks };
+  return {
+    sourceId,
+    name: source.name,
+    updated: target !== undefined,
+    stats,
+    newLinks,
+  };
 }
