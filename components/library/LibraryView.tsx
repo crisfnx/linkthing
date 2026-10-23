@@ -314,7 +314,7 @@ export function LibraryView({
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 max-sm:text-sm">
+        <label className="flex min-h-6 items-center gap-2 max-sm:text-sm">
           <input
             type="checkbox"
             checked={query.dedupe}
@@ -370,6 +370,13 @@ export function LibraryView({
             <div
               role="region"
               aria-label={strings.selection.label}
+              // Esc lets the selection go from its own buttons too, as in
+              // the list.
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                clearSelection();
+              }}
               className="flex flex-wrap items-center gap-2 border-b border-current/15 px-4 py-2 text-sm"
             >
               <span aria-live="polite" className="font-medium">

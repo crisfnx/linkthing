@@ -125,11 +125,12 @@ Open the page and drop in a WhatsApp export (in WhatsApp: a chat's menu → Expo
 | `pnpm dev` | Development server |
 | `pnpm build` / `pnpm start` | Production build, and serve it |
 | `pnpm test` | Run the test suite once (`pnpm test:watch` to keep it running) |
+| `pnpm test:e2e` | Build, then run the browser tests in your installed Google Chrome, desktop and phone |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | Generate route types, then `tsc` |
 | `pnpm format` / `pnpm format:check` | Prettier |
 
-CI runs lint, typecheck, format check and tests on every push, and the build on `main`.
+CI runs lint, typecheck, format check and tests on every push, and the build on `main`. A second job builds and runs the browser tests on every push, keeping a trace of any that fail.
 
 ## Project layout
 
@@ -162,7 +163,12 @@ docs/PRD.md         Product requirements: the full spec
 
 ## Testing
 
-Tests use [Vitest](https://vitest.dev), in two projects: `unit` (Node, for the engine and the database) and `dom` (jsdom, for components).
+Tests use [Vitest](https://vitest.dev), in two projects: `unit` (Node, for the engine and the database) and `dom` (jsdom, for components). Browser tests use [Playwright](https://playwright.dev) (`tests/e2e/`) against the production build, as a desktop and as a phone with touch:
+- the sample: search, the view kept in the address, starring, the Starred filter, a CSV of the view, and copying a selection;
+- importing chat exports: an update and the same file twice, through the file picker, and an iPhone `.zip`;
+- a backup round trip: back up, delete everything, restore from the first screen, then restore again with nothing new;
+- settings: the theme set before the page draws, duplicates collapsed by default, and finding bare domains turned off and on;
+- the phone layout: no sideways scrolling, tap targets of at least 24 px, and selecting by touch.
 
 - **`tests/fixtures/urls-edge-cases.txt` is the contract for finding URLs.** One case per line, `input ⇒ expected`. Adding a case is the way to report or fix an extraction bug.
 - **Fixtures come from real exports, anonymized.** Names, numbers and private links are replaced, while the format is kept byte for byte. Raw exports go in `tests/fixtures/raw/`, which is git-ignored. See [`tests/fixtures/README.md`](tests/fixtures/README.md).
@@ -170,7 +176,7 @@ Tests use [Vitest](https://vitest.dev), in two projects: `unit` (Node, for the e
 
 ## Tech stack
 
-[Next.js 16](https://nextjs.org) (App Router, Turbopack, React Compiler) · React 19 · TypeScript (strict) · Tailwind CSS v4 · [Dexie](https://dexie.org) (IndexedDB) · Web Workers · [tldts](https://github.com/remusao/tldts) · [fflate](https://github.com/101arrowz/fflate) · [zod](https://zod.dev) (backups) · Vitest · pnpm · Vercel
+[Next.js 16](https://nextjs.org) (App Router, Turbopack, React Compiler) · React 19 · TypeScript (strict) · Tailwind CSS v4 · [Dexie](https://dexie.org) (IndexedDB) · Web Workers · [tldts](https://github.com/remusao/tldts) · [fflate](https://github.com/101arrowz/fflate) · [zod](https://zod.dev) (backups) · Vitest · Playwright · pnpm
 
 ## Documentation
 
