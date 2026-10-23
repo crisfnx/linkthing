@@ -319,10 +319,13 @@ export const strings = {
   // Selecting links in the list (§6.5): x, or a row's checkbox.
   selection: {
     select: (title: string) => `Select ${title}`,
+    start: "Select",
+    prompt: "Choose links to copy or export.",
     selected: (n: number) => `${count(n, "link")} selected`,
     copy: "Copy URLs",
     export: "Export",
     clear: "Clear",
+    done: "Done",
     label: "Selected links",
   },
 

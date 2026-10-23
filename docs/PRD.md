@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 23 October 2026 (v2.32: M4 complete; see Document history) |
+| **Updated** | 23 October 2026 (v2.33: M5 phone layout; see Document history) |
 | **Status** | In development: M0–M4 built, M5 (polish and ship) next |
 
 ---
@@ -627,6 +627,11 @@ Per link, "Suggest tags" in the drawer runs the tagging pass for that one link.
 - **Library (M3)**: once the library has links, the list takes the page: a header with the name and an **Import** button that opens the same form in a dialog (choosing files or importing text closes it; dropping anywhere still works), the progress, errors and last import's summary above the list with **Dismiss**, a one-line count, then the list. Neither screen shows until the sources table has been read, so neither flashes up by mistake.
 - **Preview block and card view** (§6.8): the drawer's preview block and, from M8, the Organize wizard are the only places where a network action is offered, and each says what will be sent before it is sent.
 - **Mobile**: single column; facets in a bottom sheet; details as a full-screen sheet; sticky search.
+  - **As built in M5 (m5-layout).** Checked in headless Chrome at 375 × 812 (touch) and 768 × 1024 on every screen: no sideways scrolling anywhere. Every dialog fits.
+  - **Filters and details.** The filters open in a dialog below 768 px. The drawer takes the full width. The search stays above the list, which scrolls on its own, so it never scrolls away.
+  - **The toolbar** wraps into three rows on a phone instead of four. Its buttons are smaller below 640 px. The search box and the sort menu stay at 16 px, since iOS zooms into a smaller field when it's focused.
+  - **Tap targets are 24 px or more** (WCAG 2.5.8): the drawer's close button, the year arrows, "Show all sites" and Clear, and the row checkbox, whose 24 px label is the target around a 16 px box (20 px on touch screens).
+  - **Select.** With no `x` key or hover on a phone, a **Select** button in the toolbar (`aria-pressed`) shows every row's checkbox, and a tap on a row then selects it instead of opening it (Shift-click: a range). The bar says "Choose links to copy or export." until something is chosen, with Copy URLs and Export unavailable until then. **Done**, Select again or `Esc` ends it and clears the selection. `x`, hover and the checkboxes work as before.
 - **Keyboard**: `/` focus search (M3; not while typing in a field), `j`/`k` move, Enter open the details, `o` open the link, `c` copy, `s` star (M3: on the focused row and in the drawer), `x` select the focused row's link and Shift+`x` every link since the last selected (M4), `t` tag, `Esc` close drawer, or let the selection go in the list (M4). ⌘K command palette is a nice-to-have.
 - **Dark mode**: follows system, manual override in settings; Tailwind v4 `@theme` tokens, already partially wired in `app/globals.css`.
 - **Accessibility**: WCAG 2.1 AA. Progress announced via `aria-live`; controls that can't be used during an import are `aria-disabled`, not `disabled`, so the focused one keeps focus, and focus returns to "Choose files" when the element holding it goes away (the Cancel button); drawer is a proper dialog with focus trap; lists are keyboard navigable; visible focus rings; no colour-only meaning.
@@ -952,7 +957,7 @@ Quality
 
 ### Gate
 
-- [ ] The deployed MVP has been used for at least two weeks on real exports, including at least one chat update (§6.1).
+- [ ] The MVP, run locally (no deploy for now, owner's decision), has been used for at least two weeks on real exports, including at least one chat update (§6.1).
 - [ ] A short note in `docs/` records what was missing or annoying, whether stars got used (a stand-in for whether tags will be), and how many links have no title and no context or nearby text beyond the URL (the share M7 previews would have to fix).
 - [ ] The order of P1.5 and M6–M8 is set in §12 and in §14 ("Order after the MVP"), and the next milestone's list below is revised.
 
@@ -1059,8 +1064,8 @@ Eval
 | M2 | Import flow | Drop zone, paste, scan with the import dialog only when a decision is needed (adapter, day/month, duplicate, update), worker wiring with progress and cancel, single-transaction imports with gzipped raw parts, updating a chat by message key, result summary, sample data, hash-dedupe of files | M |
 | M3 | Browse | Workspace layout behind the client loader (§8.2), lean rows from the worker, virtualized list view, Tier-0 derived titles, plain search, facets, sort, dedupe toggle, details drawer with an empty preview slot, URL-synced state, keyboard nav | M |
 | M4 | Persist and export | Source rename/delete, re-extract (with adapter and day/month override), canonicalizer re-key (merges, splits, orphans), annotations (star), JSON / CSV / Markdown / plain exports with escaping, backup import, Replace for non-chat sources (§6.1), settings, storage meter and `persist()` request, delete flows | M |
-| M5 | Polish and ship | Empty states, mobile layout, dark mode pass, a11y audit, Lighthouse, Playwright E2E, README, deploy to Vercel | M |
-| Gate | Use it | Use M0–M5 on real exports for a couple of weeks. Then order Phase 1.5 and M6–M8 from what that shows (do you need the other sources and views? do you actually tag? which links lack signal?) | — |
+| M5 | Polish and ship | Empty states, mobile layout, dark mode pass, a11y audit, Lighthouse, Playwright E2E in CI on every pull request, README. No deploy for now and no new visual style: the design system comes after the gate (owner's decisions, 23 Oct 2026) | M |
+| Gate | Use it | Use M0–M5, run locally, on real exports for a couple of weeks. Then order Phase 1.5 and M6–M8 from what that shows (do you need the other sources and views? do you actually tag? which links lack signal?) | — |
 | P1.5 | Breadth | Markdown and Netscape bookmarks adapters, generic HTML adapter, Telegram JSON; grouped and compact views; sections within a site (subreddits, accounts, subdomains; §6.3); Netscape HTML export; editable tracking-param list (saving re-keys, §4.4), with Settings' canonical-vs-original display (§6.7); a storage limit with warnings (§6.4) | M |
 | M6 | Tags and smarter search | Tag vocabulary with immutable ids, tags on annotations, tag chips, drawer tag editor with autocomplete, Tags facet with category pinning, Tag manager (rename, merge with alias, merge suggestions, delete), bookmark folders → tags (once the Phase 1.5 bookmarks adapter exists), the full search grammar: field prefixes, `tag:` / `site:`, plain-word matching and interpretation chips (§6.3, §6.9 layers 1–2). No server needed | M |
 | M7 | Link previews | §6.8 Tiers 1 and 2: settings tier, favicons and video thumbnails, `/api/preview` with connect-time guard, CDN cache and Redis rate limits (§8.8), drawer preview block, row titles, card view, bulk fetch with progress, exports use titles, CSP `img-src` widened | M |
@@ -1284,3 +1289,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 23 Oct 2026 | v2.30: M4 exports (`ExportDialog`, `lib/export/`): CSV, Markdown and plain text of the view, the selected links or the library, once each or every time shared, written in the worker and saved as a file; Copy URLs; selection with `x`, Shift+`x`, a checkbox on hover and Shift-click, and a bar with Copy URLs, Export and Clear (§6.5, §7, §8.2, §8.4, §8.6, §14). The JSON backup and its restore follow in m4-backup |
 | 23 Oct 2026 | v2.31: M4 backup and restore (`lib/backup/`, `components/backup/Backup.tsx`, zod 4.6.5). Gzipped JSON Lines (the owner chose a compressed file), written in the worker in one read transaction; restore checks every line against schemas tied to the stored types, plus counts and sources, before one transaction adds what's missing, by source id or content. Stars merge, settings return only to a browser without any, and keys from another canonicalizer version are re-keyed. Restore is offered on the first screen; a backup given to Import is refused; a backup is suggested after imports of 1,000 links or more. Round trip measured at 98 k links (§6.5, §8.1, §8.2, §8.4, §8.6, §9, §14, §15) |
 | 23 Oct 2026 | v2.32: M4 complete. JSON joins the export formats (§6.5). The MVP's Extraction and Persist / export criteria are ticked: the edge-case table with bare domains off is now tested case by case, and CI passes on every M4 merge, so the CI criterion is ticked too. The keyboard, screen-reader and Lighthouse criteria wait for M5's audit (§11). Status updated; README updated |
+| 23 Oct 2026 | v2.33: M5 phone layout (m5-layout). Every screen checked at phone and tablet widths. A compact toolbar on phones; tap targets of 24 px or more; and **Select**, so links can be chosen by touch (§7). The library offers Reload when it can't be read. M5 drops the deploy and keeps the plain look, the design system coming after the gate, and the gate is run locally (owner's decisions; §11, §12) |

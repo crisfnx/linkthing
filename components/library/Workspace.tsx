@@ -84,9 +84,19 @@ export default function Workspace() {
           {hasSources && (
             <div className="flex min-h-0 flex-1 flex-col">
               {library.status === "failed" && (
-                <p role="alert" className="px-4 py-2">
-                  {strings.libraryFailed(library.message)}
-                </p>
+                <div
+                  role="alert"
+                  className="flex flex-col items-start gap-2 px-4 py-2"
+                >
+                  <p>{strings.libraryFailed(library.message)}</p>
+                  <button
+                    type="button"
+                    className="rounded-md border border-current px-3 py-1.5 font-medium"
+                    onClick={() => location.reload()}
+                  >
+                    {strings.reload}
+                  </button>
+                </div>
               )}
               {library.status === "loading" && (
                 <p className="px-4 py-2">{strings.libraryLoading}</p>

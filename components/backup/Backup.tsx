@@ -90,10 +90,12 @@ export function RestoreBackup({
   connect,
   busy = false,
   onRunning,
+  buttonClass = button,
 }: {
   connect: () => ExtractClient;
   busy?: boolean; // an import is running: wait for it
   onRunning?: (running: boolean) => void; // so imports wait for this
+  buttonClass?: string; // as the buttons beside it, on the first screen
 }) {
   const files = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -128,7 +130,7 @@ export function RestoreBackup({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className={button}
+          className={buttonClass}
           aria-disabled={busy || running}
           onClick={() => {
             if (!busy && !running) files.current?.click();

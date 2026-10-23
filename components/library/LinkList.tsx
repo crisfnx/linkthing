@@ -38,6 +38,7 @@ interface RowProps {
   starred: boolean;
   selected: boolean;
   selecting: boolean; // something is selected: every row shows its checkbox
+  picking: boolean; // Select is on: a click selects rather than opens
   linkRef?: Ref<HTMLAnchorElement>;
   onActivate: (position: number) => void;
   onSelect: (position: number, range: boolean) => void;
@@ -50,8 +51,8 @@ interface RowProps {
 // it's starred, and the date. A link shared more than once shows how often;
 // its copies sit indented under it when opened. The badge gives way to a
 // checkbox when the row is pointed at or focused, and on every row once
-// something is selected. Compiled as usual, so rows that stay on screen don't
-// redraw on scroll.
+// something is selected or Select is on; then a click selects. Compiled as
+// usual, so rows that stay on screen don't redraw on scroll.
 function LinkRow({
   rows,
   row,
@@ -66,6 +67,7 @@ function LinkRow({
   starred,
   selected,
   selecting,
+  picking,
   linkRef,
   onActivate,
   onSelect,
@@ -99,19 +101,24 @@ function LinkRow({
         >
           {domain.charAt(0).toUpperCase()}
         </span>
-        <input
-          type="checkbox"
-          checked={selected}
-          tabIndex={active ? 0 : -1}
-          aria-label={strings.selection.select(title || shown)}
-          onFocus={() => onActivate(position)}
-          // The click behind it carries Shift, for a range (§6.5).
-          onChange={(event) =>
-            onSelect(position, (event.nativeEvent as MouseEvent).shiftKey)
-          }
-          // Above the stretched link, so it stays its own control.
-          className={`relative z-10 size-4 ${selecting ? "" : "hidden group-hover:block group-has-focus-visible:block"}`}
-        />
+        {/* The label is the target, 24 px square: the box alone is 16. Above
+            the stretched link, so it stays its own control. */}
+        <label
+          className={`relative z-10 size-6 place-items-center ${selecting ? "grid" : "hidden group-hover:grid group-has-focus-visible:grid"}`}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            tabIndex={active ? 0 : -1}
+            aria-label={strings.selection.select(title || shown)}
+            onFocus={() => onActivate(position)}
+            // The click behind it carries Shift, for a range (§6.5).
+            onChange={(event) =>
+              onSelect(position, (event.nativeEvent as MouseEvent).shiftKey)
+            }
+            className="size-4 pointer-coarse:size-5"
+          />
+        </label>
       </span>
       <div className="min-w-0 flex-1">
         <a
@@ -120,18 +127,20 @@ function LinkRow({
           target="_blank"
           rel="noopener noreferrer"
           tabIndex={active ? 0 : -1}
-          aria-haspopup="dialog"
+          aria-haspopup={picking ? undefined : "dialog"}
           onFocus={() => onActivate(position)}
           onClick={(event) => {
-            // A plain click or Enter opens the details; with a modifier or
-            // the middle button it stays a link, opening a new tab (§6.2).
-            const plain = !(
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.altKey
-            );
-            if (event.button !== 0 || !plain) return;
+            // A plain click or Enter opens the details, or with Select on
+            // selects (Shift: a range); with ⌘, Ctrl or Alt, or the middle
+            // button, it stays a link, opening a new tab (§6.2).
+            if (event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.altKey) return;
+            if (picking) {
+              event.preventDefault();
+              onSelect(position, event.shiftKey);
+              return;
+            }
+            if (event.shiftKey) return;
             event.preventDefault();
             onOpen(row);
           }}
@@ -186,6 +195,7 @@ interface Props {
   openKeys: ReadonlySet<number>; // keys whose copies are shown
   starred: Uint8Array | null; // per key (starredFlags)
   selected: ReadonlySet<number>; // keys: a selection is of links, every copy
+  picking?: boolean; // Select is on (§6.5)
   onSelect: (keys: number[], on: boolean) => void;
   onClearSelection: () => void;
   onToggleCopies: (key: number) => void;
@@ -208,6 +218,7 @@ export function LinkList({
   openKeys,
   starred,
   selected,
+  picking = false,
   onSelect,
   onClearSelection,
   onToggleCopies,
@@ -281,7 +292,7 @@ export function LinkList({
       select(current, event.shiftKey);
       return;
     }
-    if (event.key === "Escape" && selected.size > 0) {
+    if (event.key === "Escape" && (picking || selected.size > 0)) {
       event.preventDefault();
       onClearSelection();
       return;
@@ -335,7 +346,8 @@ export function LinkList({
               open={openKeys.has(rows.keys[row]!)}
               starred={starred?.[rows.keys[row]!] === 1}
               selected={selected.has(rows.keys[row]!)}
-              selecting={selected.size > 0}
+              selecting={picking || selected.size > 0}
+              picking={picking}
               linkRef={
                 index === current
                   ? (link) => {

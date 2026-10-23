@@ -321,6 +321,33 @@ test("selected links: a bar to copy or export them, and to clear", async () => {
   expect(screen.queryByRole("region", { name: "Selected links" })).toBeNull();
 });
 
+test("Select: every row a checkbox, a tap selects instead of opening, Done ends it", () => {
+  renderView();
+  const select = screen.getByRole("button", { name: "Select" });
+  fireEvent.click(select);
+  expect(select.getAttribute("aria-pressed")).toBe("true");
+  const bar = screen.getByRole("region", { name: "Selected links" });
+  expect(bar.textContent).toContain("Choose links to copy or export.");
+  expect(
+    within(bar)
+      .getByRole("button", { name: "Copy URLs" })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
+  expect(screen.getAllByRole("checkbox", { name: /^Select / })).toHaveLength(4);
+
+  // A tap on a row selects its link; the drawer stays shut.
+  fireEvent.click(screen.getByRole("link", { name: "Getting started" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(bar.textContent).toContain("1 link selected");
+
+  fireEvent.click(within(bar).getByRole("button", { name: "Done" }));
+  expect(screen.queryByRole("region", { name: "Selected links" })).toBeNull();
+  expect(select.getAttribute("aria-pressed")).toBe("false");
+  // Back to normal: a click opens the details again.
+  fireEvent.click(screen.getByRole("link", { name: "Getting started" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});
+
 test("nothing matches: say so, and offer to clear", () => {
   const { search } = renderView();
   fireEvent.change(search, { target: { value: "nowhere-at-all" } });

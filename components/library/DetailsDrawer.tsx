@@ -115,7 +115,7 @@ export function DetailsDrawer({
           <button
             type="button"
             aria-label={strings.details.close}
-            className="rounded-md px-2 text-xl leading-none"
+            className="grid size-9 shrink-0 place-items-center rounded-md text-xl leading-none"
             onClick={() => dialog.current?.close()}
           >
             <span aria-hidden>×</span>
