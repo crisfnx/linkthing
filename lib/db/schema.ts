@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from "dexie";
+import Dexie, { type EntityTable, type Table } from "dexie";
 import type { Link } from "@/lib/extract/types";
 import type {
   Annotation,
@@ -21,7 +21,9 @@ export type LinkVaultDb = Dexie & {
   enrichments: EntityTable<Enrichment, "urlKey">;
   tags: EntityTable<Tag, "id">;
   classifications: EntityTable<Classification, "urlKey">;
-  settings: EntityTable<StoredSettings | Meta, "key">;
+  // Keyed by its two rows' names. Not an EntityTable: its insert type would
+  // keep only what both rows share, refusing either one written out.
+  settings: Table<StoredSettings | Meta, "settings" | "meta">;
 };
 
 export function createDb(

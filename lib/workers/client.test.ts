@@ -2,6 +2,7 @@ import Dexie from "dexie";
 import { zipSync } from "fflate";
 import { afterEach, expect, test, vi } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
+import { CANONICALIZER_VERSION } from "@/lib/extract/url/canonicalize";
 import type { ImportProgress } from "@/lib/import/options";
 import { BARE, textAt, type LibraryRows } from "@/lib/library/rows";
 import { saveSettings } from "@/lib/settings";
@@ -210,4 +211,33 @@ test("imports and re-extracts follow Settings → Find bare domains", async () =
   await client.scan({ text: `${text}\nmore` });
   await client.start({});
   expect(await bareRows()).toBe(0);
+});
+
+test("the first load brings stored keys up to the canonicalizer's version", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  await client.scan({ text: "https://example.com/a?utm_source=x" });
+  const { sourceId } = await client.start({});
+  const stored = (await db.links.where("sourceId").equals(sourceId).first())!;
+  // As an older canonicalizer would have left them.
+  await db.links.update(stored.id, { urlKey: "old:a" });
+  await db.annotations.put({
+    urlKey: "old:a",
+    url: stored.url,
+    starred: 1,
+    updatedAt: 1,
+  });
+  await db.settings.put({ key: "meta", canonicalizerVersion: 0 });
+
+  // A new worker, as after an update: its first request re-keys.
+  const fresh = createExtractClient(fakeWorker(db));
+  const rows = await fresh.load();
+  expect(textAt(rows.urlKeys, rows.keys[0]!)).toBe("https://example.com/a");
+  expect(await db.annotations.get("https://example.com/a")).toMatchObject({
+    starred: 1,
+  });
+  expect(await db.settings.get("meta")).toEqual({
+    key: "meta",
+    canonicalizerVersion: CANONICALIZER_VERSION,
+  });
 });
