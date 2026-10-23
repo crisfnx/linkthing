@@ -319,6 +319,15 @@ test("selected links: a bar to copy or export them, and to clear", async () => {
 
   fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
   expect(screen.queryByRole("region", { name: "Selected links" })).toBeNull();
+
+  // Esc from the bar's own buttons lets the selection go too.
+  link.focus();
+  fireEvent.keyDown(link, { key: "x" });
+  const again = screen.getByRole("region", { name: "Selected links" });
+  fireEvent.keyDown(within(again).getByRole("button", { name: "Copy URLs" }), {
+    key: "Escape",
+  });
+  expect(screen.queryByRole("region", { name: "Selected links" })).toBeNull();
 });
 
 test("Select: every row a checkbox, a tap selects instead of opening, Done ends it", () => {

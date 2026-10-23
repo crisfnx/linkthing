@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 23 October 2026 (v2.33: M5 phone layout; see Document history) |
+| **Updated** | 23 October 2026 (v2.34: M5 browser tests; see Document history) |
 | **Status** | In development: M0–M4 built, M5 (polish and ship) next |
 
 ---
@@ -766,7 +766,7 @@ tests/
                              whatsapp-de.txt, whatsapp-update-older.txt + whatsapp-update-newer.txt (overlapping exports),
                              whatsapp-ambiguous-dates.txt and whatsapp-unsure.txt (synthetic: the dialog's date-order and
                              adapter questions), plaintext.txt, urls-edge-cases.txt; markdown.md and bookmarks.html in Phase 1.5
-  e2e/                       import-search-export.spec.ts
+  e2e/                       library, import, backup, settings and phone specs (Playwright; playwright.config.ts at the root)
   eval/                      tags-labeled.json (≈150 hand-tagged links, anonymized), recorded model responses
 public/
   sample-chat.txt            the sample chat (made up, §6.1)
@@ -780,9 +780,17 @@ docs/
 - **URL edge-case table** (`urls-edge-cases.txt`): one candidate per line with the expected extraction, or `∅`. This is the regression suite for the regex and repair rules.
 - Component tests for the import dialog, search syntax and export formatting.
 - One Playwright E2E using the sample fixture.
+  - **As built in M5 (m5-e2e):** five spec files, ten tests, run against the production build on port 3200 in two projects: desktop Chrome, and a Pixel 7 with touch for `phone.spec.ts`.
+    - **Library:** the sample, search with the view in the address through a reload, the star in the drawer, the Starred filter, a CSV of the view checked line by line, and a selection's URL copied.
+    - **Import:** a chat export, its newer export as an update by Enter, the same file refused, and an iPhone `.zip`, all through the file picker.
+    - **Backup:** download, Delete everything, restore from the first screen, and restore again for "Nothing to restore".
+    - **Settings:** the dark theme set before `<body>`, duplicates collapsed by default, and Find bare domains off and on.
+    - **Phone:** no sideways scrolling, no control under 24 px, the drawer at full width, and Select by tap.
+  - **How they run.** Locators go by role and accessible name, so a control without a name fails a test. Locally the tests run in the installed Google Chrome, so nothing is downloaded; CI installs Playwright's Chromium. `@playwright/test` is pinned at 1.64.0, the newest release at least two weeks old. Ten tests run three times each passed every time.
+  - **What they found:** Esc didn't let a selection go from the bar's own buttons, and the "Collapse duplicates" label was 20 px tall on phones; both are fixed.
 - Dexie repos (import atomicity and cancel, chat updates, re-key with merges, splits and orphans, backup merge) under Vitest with `fake-indexeddb`.
 - Fixtures and the eval set are anonymized before they are committed (names, phone numbers, private URLs). The raw exports they came from stay out of git.
-- CI: `pnpm lint && pnpm typecheck && pnpm test` on every push; `pnpm build` on main.
+- CI: `pnpm lint && pnpm typecheck && pnpm test` on every push; `pnpm build` on main. Since M5 a second job installs Playwright's Chromium, builds and runs `pnpm test:e2e` on every push, uploading the traces of any test that fails (kept 7 days).
 
 ### 8.6 Performance budgets
 
@@ -1290,3 +1298,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 23 Oct 2026 | v2.31: M4 backup and restore (`lib/backup/`, `components/backup/Backup.tsx`, zod 4.6.5). Gzipped JSON Lines (the owner chose a compressed file), written in the worker in one read transaction; restore checks every line against schemas tied to the stored types, plus counts and sources, before one transaction adds what's missing, by source id or content. Stars merge, settings return only to a browser without any, and keys from another canonicalizer version are re-keyed. Restore is offered on the first screen; a backup given to Import is refused; a backup is suggested after imports of 1,000 links or more. Round trip measured at 98 k links (§6.5, §8.1, §8.2, §8.4, §8.6, §9, §14, §15) |
 | 23 Oct 2026 | v2.32: M4 complete. JSON joins the export formats (§6.5). The MVP's Extraction and Persist / export criteria are ticked: the edge-case table with bare domains off is now tested case by case, and CI passes on every M4 merge, so the CI criterion is ticked too. The keyboard, screen-reader and Lighthouse criteria wait for M5's audit (§11). Status updated; README updated |
 | 23 Oct 2026 | v2.33: M5 phone layout (m5-layout). Every screen checked at phone and tablet widths. A compact toolbar on phones; tap targets of 24 px or more; and **Select**, so links can be chosen by touch (§7). The library offers Reload when it can't be read. M5 drops the deploy and keeps the plain look, the design system coming after the gate, and the gate is run locally (owner's decisions; §11, §12) |
+| 23 Oct 2026 | v2.34: M5 browser tests (m5-e2e). Playwright 1.64.0, ten tests across five specs on desktop and phone, in CI on every push with traces kept on failure (§8.4, §8.5). Fixed what they found: Esc from the selection bar, and the Collapse duplicates label's height on phones |
