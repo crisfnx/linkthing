@@ -223,3 +223,43 @@ describe("a file detection isn't sure of", () => {
     expect(onDecide).toHaveBeenCalledWith({ kind: "plaintext" });
   });
 });
+
+describe("a file named as a source that isn't a chat (§6.1)", () => {
+  const notes: Partial<ScanResult> = {
+    fileName: "notes.txt",
+    detection: {
+      kind: "plaintext",
+      scores: [{ kind: "plaintext", score: 0.1 }],
+      needsConfirmation: false,
+    },
+    dateOrder: undefined,
+    replaceCandidate: { sourceId: "notes-1", sourceName: "My notes" },
+    questions: ["replace"],
+  };
+
+  function askNotes() {
+    vi.stubGlobal("navigator", { language: "en-GB" });
+    const onDecide = vi.fn();
+    render(<ImportDialog scan={{ ...chat, ...notes }} onDecide={onDecide} />);
+    screen.getByRole("dialog", { name: "Before importing notes.txt" });
+    return onDecide;
+  }
+
+  test("offers Replace, chosen to start with", () => {
+    const onDecide = askNotes();
+    expect(legends()).toEqual(["You already have a source called “My notes”."]);
+    expect(checked("Replace it with this file (stars stay)")).toBe(true);
+    click("Replace “My notes”");
+    expect(onDecide).toHaveBeenCalledWith({
+      kind: "plaintext",
+      replaceOf: "notes-1",
+    });
+  });
+
+  test("or as a new source beside it", () => {
+    const onDecide = askNotes();
+    pick("Import it as a new source");
+    click("Import");
+    expect(onDecide).toHaveBeenCalledWith({ kind: "plaintext" });
+  });
+});

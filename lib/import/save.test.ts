@@ -5,6 +5,7 @@ import { decompressText } from "@/lib/db/raw";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { whatsapp } from "@/lib/extract/adapters/whatsapp";
 import { extractLinks } from "@/lib/extract/pipeline";
+import { toggleStar } from "@/lib/library/details";
 import type { Link } from "@/lib/extract/types";
 import type { ImportProgress } from "./options";
 import { saveImport, type ImportChoice } from "./save";
@@ -77,7 +78,7 @@ describe("a new source", () => {
     expect(imported).toEqual({
       sourceId,
       name: "Me",
-      updated: false,
+      how: "new",
       stats: expected.stats,
       newLinks: 17,
     });
@@ -253,7 +254,7 @@ describe("an update from a newer export", () => {
     const { db, sourceId, update } = await updated();
     expect(update).toMatchObject({
       name: "whatsapp-update-older.txt", // the source keeps its name
-      updated: true,
+      how: "updated",
       newLinks: 12, // 26 in the newer export, 14 stored
     });
     expect(await rowCounts(db)).toEqual([1, 2, 29]);
@@ -337,5 +338,98 @@ describe("an update from a newer export", () => {
       saveImport(db, scan, { updateOf: imported.sourceId }),
     ).rejects.toThrow("plaintext");
     expect(await rowCounts(db)).toEqual([1, 1, 1]);
+  });
+});
+
+describe("a replace, for a file that isn't a chat (§6.1)", () => {
+  const notes = (text: string, name = "notes.txt") => ({
+    file: new File([text], name),
+  });
+
+  async function replaced() {
+    const db = freshDb();
+    const first = await importInput(
+      db,
+      notes("https://example.com/a\nhttps://example.com/b"),
+    );
+    const { sourceId } = first.imported;
+    await db.sources.update(sourceId, { name: "My notes" }); // renamed since
+    const importedAt = (await db.sources.get(sourceId))!.importedAt;
+    const kept = (await linksOf(db, sourceId)).find((l) =>
+      l.url.endsWith("/a"),
+    )!;
+    await toggleStar(db, kept);
+
+    const scan = await scanInput(
+      db,
+      notes(
+        "https://example.com/a\nhttps://example.com/c\nhttps://example.com/d",
+      ),
+    );
+    expect(scan.result.replaceCandidate).toEqual({
+      sourceId,
+      sourceName: "My notes",
+    });
+    const replace = await saveImport(db, scan, { replaceOf: sourceId });
+    return { db, sourceId, first, kept, replace, importedAt };
+  }
+
+  test("the source keeps its id, name and first import; its links are the new file's", async () => {
+    const { db, sourceId, first, replace, importedAt } = await replaced();
+    expect(replace).toMatchObject({
+      sourceId,
+      name: "My notes",
+      how: "replaced",
+      newLinks: 3,
+    });
+    const source = (await db.sources.get(sourceId))!;
+    expect(source.importedAt).toBe(importedAt);
+    expect(source.updatedAt).toBeGreaterThanOrEqual(importedAt);
+    expect(source.stats.links).toBe(3);
+    expect(first.imported.stats.links).toBe(2);
+    expect((await linksOf(db, sourceId)).map((l) => l.url).sort()).toEqual([
+      "https://example.com/a",
+      "https://example.com/c",
+      "https://example.com/d",
+    ]);
+  });
+
+  test("a shorter file leaves none of the old file's links behind", async () => {
+    const { db, sourceId } = await replaced();
+    const scan = await scanInput(db, notes("https://example.com/e"));
+    await saveImport(db, scan, { replaceOf: sourceId });
+    expect((await linksOf(db, sourceId)).map((l) => l.url)).toEqual([
+      "https://example.com/e",
+    ]);
+    expect(await db.links.count()).toBe(1);
+  });
+
+  test("the old file's part is gone: one part, the new text", async () => {
+    const { db, sourceId } = await replaced();
+    const parts = await db.sourceParts
+      .where("sourceId")
+      .equals(sourceId)
+      .toArray();
+    expect(parts).toHaveLength(1);
+    expect(await decompressText(parts[0]!.raw)).toContain("example.com/d");
+  });
+
+  test("stars stay, by the link's address", async () => {
+    const { db, kept } = await replaced();
+    expect(await db.annotations.get(kept.urlKey)).toMatchObject({
+      starred: true,
+    });
+  });
+
+  test("a chat is never replaced: it takes updates", async () => {
+    const db = freshDb();
+    const { imported } = await importInput(
+      db,
+      dropped("whatsapp-update-older.txt"),
+    );
+    const scan = await scanInput(db, notes("https://example.com/a"));
+    await expect(
+      saveImport(db, scan, { replaceOf: imported.sourceId }),
+    ).rejects.toThrow("takes updates");
   });
 });

@@ -170,3 +170,20 @@ test("a full disk is reported as such", async () => {
   });
   expect(await db.sources.count()).toBe(0);
 });
+
+test("reextract reads a stored source again, with progress", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  await client.scan({ text: "https://example.com/a\nhttps://example.com/b" });
+  const { sourceId } = await client.start();
+  const phases: string[] = [];
+
+  const result = await client.reextract(sourceId, {}, (p) =>
+    phases.push(p.phase),
+  );
+  expect(result).toMatchObject({ sourceId, how: "reextracted", newLinks: 2 });
+  expect(phases).toEqual(
+    expect.arrayContaining(["reading", "parsing", "extracting", "saving"]),
+  );
+  expect(await db.links.count()).toBe(2);
+});

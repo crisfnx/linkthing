@@ -47,6 +47,7 @@ function fakeClient(load: ExtractClient["load"]) {
     terminate: vi.fn(),
     load: vi.fn(load),
     deleteSource: vi.fn(),
+    reextract: vi.fn(),
   } satisfies ExtractClient;
 }
 

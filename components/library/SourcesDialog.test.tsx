@@ -12,10 +12,12 @@ import {
 import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { extractLinks } from "@/lib/extract/pipeline";
 import { deleteSource } from "@/lib/library/sources";
+import type { Source } from "@/lib/db/types";
+import type { ReextractChoice } from "@/lib/import/reextract";
 import type { ExtractClient } from "@/lib/workers/client";
 import { SourcesDialog } from "./SourcesDialog";
 
@@ -82,11 +84,17 @@ function worker(db: LinkVaultDb, fail = false) {
   };
 }
 
+type Harness = {
+  onReextract?: (source: Source, choice: ReextractChoice) => void;
+};
+
 // The sources live, as the workspace reads them.
 function Harness(props: {
   db: LinkVaultDb;
   connect: () => ExtractClient;
   onDeleted?: (id: string) => void;
+  onReextract?: (source: Source, choice: ReextractChoice) => void;
+  jobRunning?: boolean;
 }) {
   const sources = useLiveQuery(
     () => props.db.sources.orderBy("importedAt").reverse().toArray(),
@@ -103,11 +111,16 @@ function Harness(props: {
       onClose={() => {}}
       say={setSaid}
       notice={said && <p role="status">{said}</p>}
+      onReextract={props.onReextract}
+      jobRunning={props.jobRunning}
     />
   );
 }
 
-async function setup(fail = false) {
+async function setup(
+  fail = false,
+  extra: { onReextract?: Harness["onReextract"]; jobRunning?: boolean } = {},
+) {
   const db = createDb(`test-${crypto.randomUUID()}`);
   opened.push(db);
   const chat = await importFixture(
@@ -124,7 +137,9 @@ async function setup(fail = false) {
   );
   const { connect, remove } = worker(db, fail);
   const onDeleted = vi.fn();
-  render(<Harness db={db} connect={connect} onDeleted={onDeleted} />);
+  render(
+    <Harness db={db} connect={connect} onDeleted={onDeleted} {...extra} />,
+  );
   const dialog = await screen.findByRole("dialog", { name: "Sources (2)" });
   return { db, chat, notes, dialog, remove, onDeleted };
 }
@@ -263,4 +278,115 @@ test("a delete that fails says nothing was removed, and can be tried again", asy
   );
   expect(await db.sources.count()).toBe(2);
   expect(entry(dialog, "Me").textContent).toContain("Delete “Me” and its");
+});
+
+describe("re-extract (§6.4)", () => {
+  async function opened(extra: { jobRunning?: boolean } = {}) {
+    const onReextract = vi.fn();
+    const ctx = await setup(false, { onReextract, ...extra });
+    return { ...ctx, onReextract };
+  }
+
+  const reextractOf = (dialog: HTMLElement, name: string) =>
+    within(entry(dialog, name)).getByRole("button", { name: "Re-extract" });
+
+  test("asks how to read it, preset to how it's read now, then hands over and closes", async () => {
+    const { dialog, chat, onReextract } = await opened();
+    fireEvent.click(reextractOf(dialog, "Me"));
+    const form = within(dialog).getByRole("form", { name: "Re-extract" });
+    expect(
+      (within(form).getByLabelText(/As a WhatsApp chat/) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+    expect(
+      (
+        within(form).getByLabelText(
+          "Day first (31/12/2026)",
+        ) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+
+    fireEvent.click(within(form).getByLabelText("Month first (12/31/2026)"));
+    fireEvent.submit(form);
+    expect(onReextract).toHaveBeenCalledWith(
+      expect.objectContaining({ id: chat.sourceId }),
+      { kind: "whatsapp", dateOrder: "MDY" },
+    );
+    expect(dialog.hasAttribute("open")).toBe(false);
+  });
+
+  test("as plain text, which has no dates to ask about", async () => {
+    const { dialog, onReextract } = await opened();
+    fireEvent.click(reextractOf(dialog, "Me"));
+    const form = within(dialog).getByRole("form", { name: "Re-extract" });
+    fireEvent.click(within(form).getByLabelText(/As plain text/));
+    expect(within(form).queryByText("Dates are written")).toBeNull();
+    fireEvent.submit(form);
+    expect(onReextract).toHaveBeenCalledWith(expect.anything(), {
+      kind: "plaintext",
+    });
+  });
+
+  test("a chat of several exports can only be read as a chat", async () => {
+    const { db, dialog, chat } = await opened();
+    await act(async () => {
+      await db.sourceParts.add({
+        id: crypto.randomUUID(),
+        sourceId: chat.sourceId,
+        importedAt: Date.now(),
+        byteSize: 1,
+        contentHash: "newer",
+        raw: new Uint8Array() as unknown as Blob,
+      });
+    });
+    fireEvent.click(reextractOf(dialog, "Me"));
+    const plain = (await within(dialog).findByLabelText(
+      /As plain text/,
+    )) as HTMLInputElement;
+    await waitFor(() => expect(plain.disabled).toBe(true));
+    expect(entry(dialog, "Me").textContent).toContain(
+      "Updated from several exports, so it can only be read as a chat.",
+    );
+  });
+
+  test("a source read by an older version says re-extract would update it", async () => {
+    const { db, dialog, notes } = await opened();
+    await act(async () => {
+      await db.sources.update(notes.sourceId, { adapterVersion: 0 });
+    });
+    await waitFor(() =>
+      expect(entry(dialog, "plaintext.txt").textContent).toContain(
+        "read by an older version: re-extract to use the current one",
+      ),
+    );
+  });
+
+  test("Esc backs out of the form, not the dialog", async () => {
+    const { dialog } = await opened();
+    const button = reextractOf(dialog, "Me");
+    fireEvent.click(button);
+    act(() => {
+      dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+    });
+    expect(within(dialog).queryByRole("form")).toBeNull();
+    expect(dialog.hasAttribute("open")).toBe(true);
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Re-extract"),
+    );
+  });
+
+  test("while an import runs, it waits", async () => {
+    const { dialog } = await opened({ jobRunning: true });
+    const button = reextractOf(dialog, "Me");
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(button);
+    expect(within(dialog).queryByRole("form")).toBeNull();
+  });
+
+  test("without the import flow, there's no Re-extract", async () => {
+    const { dialog } = await setup();
+    expect(
+      within(dialog).queryByRole("button", { name: "Re-extract" }),
+    ).toBeNull();
+  });
 });

@@ -49,8 +49,12 @@ export function ImportDialog({ scan, onDecide }: Props) {
   const groupName = useId();
 
   const update = scan.updateCandidate;
+  const replace = scan.replaceCandidate;
   const offered = likelyKind(scan.detection);
   const [asUpdate, setAsUpdate] = useState(update !== undefined);
+  // Replace is the likely intent for a file of the same name: an edited
+  // version of the same notes (§6.1). Stars survive it either way.
+  const [asReplace, setAsReplace] = useState(replace !== undefined);
   const [kind, setKind] = useState<SourceKind>(offered);
   const [dateOrder, setDateOrder] = useState<DateOrder>(() =>
     dateOrderFor(navigator.language),
@@ -72,7 +76,10 @@ export function ImportDialog({ scan, onDecide }: Props) {
 
   function choice(): ImportChoice {
     if (update && asUpdate) return { updateOf: update.sourceId };
-    return asksDates ? { kind, dateOrder } : { kind };
+    const read: ImportChoice = asksDates ? { kind, dateOrder } : { kind };
+    return replace && asReplace
+      ? { ...read, replaceOf: replace.sourceId }
+      : read;
   }
 
   const label = scan.fileName ?? strings.pastedText;
@@ -80,9 +87,11 @@ export function ImportDialog({ scan, onDecide }: Props) {
   const primary =
     update && asUpdate
       ? say.addToSource(update.sourceName)
-      : scan.duplicateOf
-        ? say.importAgain
-        : say.import;
+      : replace && asReplace
+        ? say.replaceSource(replace.sourceName)
+        : scan.duplicateOf
+          ? say.importAgain
+          : say.import;
 
   return (
     <dialog
@@ -126,6 +135,26 @@ export function ImportDialog({ scan, onDecide }: Props) {
               name={`${groupName}-update`}
               checked={!asUpdate}
               onSelect={() => setAsUpdate(false)}
+            >
+              {say.asNewSource}
+            </Choice>
+          </fieldset>
+        )}
+
+        {replace && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2">{say.replace(replace.sourceName)}</legend>
+            <Choice
+              name={`${groupName}-replace`}
+              checked={asReplace}
+              onSelect={() => setAsReplace(true)}
+            >
+              {say.replaceIt}
+            </Choice>
+            <Choice
+              name={`${groupName}-replace`}
+              checked={!asReplace}
+              onSelect={() => setAsReplace(false)}
             >
               {say.asNewSource}
             </Choice>

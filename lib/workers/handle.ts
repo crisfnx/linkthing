@@ -1,6 +1,7 @@
 import type { LinkVaultDb } from "@/lib/db/schema";
 import { InputError } from "@/lib/extract/input";
 import type { ImportOptions } from "@/lib/import/options";
+import { reextractSource } from "@/lib/import/reextract";
 import { saveImport } from "@/lib/import/save";
 import { scanInput, type Scan } from "@/lib/import/scan";
 import { loadRows, transferablesOf } from "@/lib/library/rows";
@@ -99,6 +100,16 @@ export function createHandler({ db, post }: WorkerContext) {
           options.signal?.throwIfAborted();
           scanned = scan;
           return { id, type: "scanned", scan: scan.result };
+        });
+      case "reextract":
+        return run(id, async (options) => {
+          const imported = await reextractSource(
+            db,
+            request.sourceId,
+            request.choice,
+            options,
+          );
+          return { id, type: "done", imported };
         });
       case "start": {
         // Used once: trying again after a failure starts from a new scan,
