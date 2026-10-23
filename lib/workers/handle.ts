@@ -4,6 +4,11 @@ import type { ImportOptions } from "@/lib/import/options";
 import { reextractSource } from "@/lib/import/reextract";
 import { saveImport } from "@/lib/import/save";
 import { scanInput, type Scan } from "@/lib/import/scan";
+import {
+  CURRENT_CANONICALIZER,
+  rekeyIfNeeded,
+  type Canonicalizer,
+} from "@/lib/library/rekey";
 import { loadRows, transferablesOf } from "@/lib/library/rows";
 import { deleteSource } from "@/lib/library/sources";
 import { readSettings } from "@/lib/settings";
@@ -17,6 +22,7 @@ export interface WorkerContext {
   db: LinkVaultDb;
   // transfer: buffers to move to the page rather than copy (library rows)
   post: (response: WorkerResponse, transfer?: Transferable[]) => void;
+  canonicalizer?: Canonicalizer; // the current one; tests pass another
 }
 
 // IndexedDB reports a full disk as QuotaExceededError, and Dexie can wrap it
@@ -42,10 +48,25 @@ function unexpected(id: number, error: unknown): WorkerResponse {
 
 // The worker's side of the protocol, kept apart from extract.worker.ts so it
 // can be tested without a Worker.
-export function createHandler({ db, post }: WorkerContext) {
+export function createHandler({
+  db,
+  post,
+  canonicalizer = CURRENT_CANONICALIZER,
+}: WorkerContext) {
   // The last scan's text waits here for the start that follows it.
   let scanned: Scan | undefined;
   let running: AbortController | undefined;
+  // Stored links follow the canonicalizer's version (§4.4): brought up to it
+  // once, before the first request that reads or writes them. A failure is
+  // reported to that request, and the next one tries again.
+  let rekeyed: Promise<unknown> | undefined;
+  function upToDate(): Promise<unknown> {
+    rekeyed ??= rekeyIfNeeded(db, canonicalizer).catch((error: unknown) => {
+      rekeyed = undefined;
+      throw error;
+    });
+    return rekeyed;
+  }
 
   async function run(
     id: number,
@@ -54,6 +75,7 @@ export function createHandler({ db, post }: WorkerContext) {
     const controller = new AbortController();
     running = controller;
     try {
+      await upToDate();
       // Read for each request, so a change in Settings, from this tab or
       // another, applies to the next import.
       const { findBareDomains } = await readSettings(db);
@@ -84,6 +106,7 @@ export function createHandler({ db, post }: WorkerContext) {
       // Neither goes through run(): that would make it what Cancel stops.
       case "load":
         try {
+          await upToDate();
           const rows = await loadRows(db);
           return post({ id, type: "rows", rows }, transferablesOf(rows));
         } catch (error) {
@@ -91,6 +114,7 @@ export function createHandler({ db, post }: WorkerContext) {
         }
       case "delete":
         try {
+          await upToDate();
           const { links } = await deleteSource(db, request.sourceId);
           return post({ id, type: "deleted", links });
         } catch (error) {

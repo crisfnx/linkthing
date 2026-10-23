@@ -2,8 +2,10 @@ import type { TrackingParam } from "@/lib/extract/types";
 import { registrableDomain } from "./domain";
 import { DEFAULT_TRACKING_PARAMS } from "./tracking-params";
 
-// Bump when canonicalize() or toUrlKey() changes what they return: stored
-// links are then re-keyed (PRD §4.4).
+// Bump when describeUrl() would describe a stored URL differently: a change
+// to canonicalize() or toUrlKey(), or to the site, kind or shortener rules.
+// The worker then re-describes stored links and moves stars and other
+// per-URL rows to their new keys (PRD §4.4, lib/library/rekey.ts).
 export const CANONICALIZER_VERSION = 1;
 
 const valuePatterns = new Map<string, RegExp>();
