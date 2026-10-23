@@ -139,6 +139,9 @@ export const strings = {
       `Couldn't find a chat in ${label}: there's no .txt inside. Export the chat again and drop the new file.`,
     "unreadable-zip": (label: string) =>
       `Couldn't open ${label}: the zip file is damaged or incomplete. Download or export it again, then drop the new file.`,
+    "is-backup": (label: string) =>
+      `${label} is a LinkVault backup, so it wasn't imported. To bring back what it holds, use Restore from a backup, in Settings or on the first screen.`,
+    "invalid-backup": () => "That backup couldn't be restored.",
     "too-large": (label: string) =>
       `Couldn't import ${label}: it's over ${mb(MAX_INPUT_BYTES)}, more than LinkVault can take at once. If it's a chat exported with media, export it again without media.`,
     "quota-exceeded": () =>
@@ -351,6 +354,41 @@ export const strings = {
     nothing: "No links to export.",
     copyFailed: "Couldn't copy: the browser didn't allow it.",
     failed: "Couldn't export the links. Try again.",
+  },
+
+  // Backups (§6.5).
+  backup: {
+    heading: "Backups",
+    note: "A backup is one file with your sources, their original text, links and stars. Restoring one adds what's missing and never deletes anything.",
+    download: "Download a backup",
+    preparing: "Preparing the backup…",
+    saved: (name: string, sources: number, links: number) =>
+      `Saved ${name}: ${count(sources, "source")} and ${count(links, "link")}.`,
+    failed: "Couldn't make the backup. Try again.",
+    restore: "Restore from a backup…",
+    checking: "Checking the backup…",
+    restoring: (done: number, total: number) =>
+      `Restoring ${number.format(done)} of ${count(total, "link")}…`,
+    restored: (sources: number, links: number, stars: number) =>
+      `Restored ${count(sources, "source")} and ${count(links, "link")}${
+        stars > 0 ? `, with ${count(stars, "star")}` : ""
+      }.`,
+    alreadyHere: (n: number) =>
+      n === 1
+        ? "1 source in the backup was already here."
+        : `${number.format(n)} sources in the backup were already here.`,
+    nothingNew: (n: number) =>
+      n === 0
+        ? "Nothing to restore: the backup is empty."
+        : n === 1
+          ? "Nothing to restore: the source in this backup is already here."
+          : `Nothing to restore: all ${count(n, "source")} in this backup are already here.`,
+    restoreFailed:
+      "Couldn't restore the backup, so nothing was changed. Try again.",
+    cancelled: "Restore cancelled. Nothing from it was saved.",
+    cancel: "Cancel",
+    nudge:
+      "Your library lives only in this browser. A backup keeps it safe if the browser ever clears it.",
   },
 
   // Settings (§6.7).

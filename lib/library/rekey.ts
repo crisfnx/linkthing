@@ -55,7 +55,7 @@ type Keyed = { urlKey: string; url: string };
 
 // A star or a tag is something the user did, so a merge keeps all of them;
 // for the rest of an annotation the newest row wins (§4.4).
-function mergeAnnotations(a: Annotation, b: Annotation): Annotation {
+export function mergeAnnotations(a: Annotation, b: Annotation): Annotation {
   const [older, newer] = a.updatedAt <= b.updatedAt ? [a, b] : [b, a];
   const merged: Annotation = { ...older, ...newer };
   const union = (x?: string[], y?: string[]) =>

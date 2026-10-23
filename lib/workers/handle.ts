@@ -1,4 +1,5 @@
 import type { LinkVaultDb } from "@/lib/db/schema";
+import { writeBackup } from "@/lib/backup/write";
 import { formatExport } from "@/lib/export/formats";
 import { exportRows, FILE_TYPES } from "@/lib/export/rows";
 import { InputError } from "@/lib/extract/input";
@@ -39,6 +40,10 @@ function isQuotaError(error: unknown): boolean {
 function errorCode(error: unknown, signal: AbortSignal): WorkerErrorCode {
   if (signal.aborted) return "cancelled";
   if (error instanceof InputError) return error.code;
+  // BackupError, from a module loaded only when restoring.
+  if ((error as { code?: unknown } | null)?.code === "invalid-backup") {
+    return "invalid-backup";
+  }
   if (isQuotaError(error)) return "quota-exceeded";
   return "unexpected";
 }
@@ -133,6 +138,24 @@ export function createHandler({
         } catch (error) {
           return post(unexpected(id, error));
         }
+      case "backup":
+        try {
+          await upToDate();
+          const { file, counts } = await writeBackup(db);
+          return post({ id, type: "backedUp", file, counts });
+        } catch (error) {
+          return post(unexpected(id, error));
+        }
+      case "restore":
+        return run(id, async (options) => {
+          // zod comes with it, and only now.
+          const { restoreBackup } = await import("@/lib/backup/restore");
+          const restored = await restoreBackup(db, request.file, {
+            ...options,
+            canonicalizer,
+          });
+          return { id, type: "restored", restored };
+        });
       case "scan":
         scanned = undefined;
         return run(id, async (options) => {

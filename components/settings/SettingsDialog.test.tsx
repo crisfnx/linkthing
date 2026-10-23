@@ -20,6 +20,7 @@ import { describeUrl } from "@/lib/extract/url/describe";
 import { toggleStar } from "@/lib/library/details";
 import { RowsBuilder } from "@/lib/library/rows";
 import { readSettings, saveSettings } from "@/lib/settings";
+import type { ExtractClient } from "@/lib/workers/client";
 import { SettingsDialog } from "./SettingsDialog";
 
 const opened: LinkVaultDb[] = [];
@@ -94,6 +95,7 @@ async function open(
         settings={await readSettings(db, "en-GB")}
         sources={sources}
         rows={rows}
+        connect={() => ({}) as ExtractClient}
         onClose={onClose}
       />
     </ImportFlowContext>,
@@ -341,4 +343,14 @@ describe("storage", () => {
       ),
     ).toBeTruthy();
   });
+});
+
+test("Storage offers a backup and a restore", async () => {
+  await open(await library());
+  expect(
+    screen.getByRole("button", { name: "Download a backup" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Restore from a backup…" }),
+  ).toBeTruthy();
 });

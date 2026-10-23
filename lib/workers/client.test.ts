@@ -5,6 +5,7 @@ import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { CANONICALIZER_VERSION } from "@/lib/extract/url/canonicalize";
 import type { ImportProgress } from "@/lib/import/options";
 import { BARE, textAt, type LibraryRows } from "@/lib/library/rows";
+import { deleteEverything } from "@/lib/library/sources";
 import { saveSettings } from "@/lib/settings";
 import { createExtractClient, WorkerError, type WorkerPort } from "./client";
 import { createHandler } from "./handle";
@@ -274,4 +275,30 @@ test("export writes the links asked for, in that order, as a file", async () => 
   expect(lines[1]).toContain('"yes"'); // starred
   expect(lines[1]).toContain('"https://example.com/b?utm_source=x"');
   expect(lines[1]?.endsWith('"2"')).toBe(true); // times shared
+});
+
+test("backup and restore through the worker; a bad file says why", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  await client.scan({ text: "https://example.com/a\nhttps://example.com/b" });
+  await client.start({});
+  const { file, counts } = await client.backup();
+  expect(counts).toMatchObject({ sources: 1, parts: 1, links: 2 });
+
+  await deleteEverything(db);
+  const progress: ImportProgress[] = [];
+  expect(await client.restore(file, (p) => progress.push(p))).toEqual({
+    sources: 1,
+    links: 2,
+    stars: 0,
+    alreadyHere: 0,
+  });
+  expect(progress.at(-1)).toEqual({ phase: "saving", done: 2, total: 2 });
+  expect(await db.links.count()).toBe(2);
+
+  const bad = client.restore(new Blob(["not a backup"]));
+  await expect(bad).rejects.toMatchObject({
+    code: "invalid-backup",
+    message: "This isn't a LinkVault backup.",
+  });
 });
