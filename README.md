@@ -6,7 +6,7 @@ LinkVault (working name; the repo is `linkthing`) is a local-first web app for r
 
 Nothing leaves your browser. There's no account and no upload.
 
-> **Status: early development.** The app works end to end in your browser: drop in a chat export or any text (or click **Try with sample data**), then search, filter, star and export your links, manage your sources and settings, and keep a backup. Polish and a first deploy (M5) are next. The UI is deliberately plain until a design system is chosen.
+> **Status: the MVP is built.** The app works end to end in your browser: drop in a chat export or any text (or click **Try with sample data**), then search, filter, star and export your links, manage your sources and settings, and keep a backup. It works on phones and by keyboard, and passes automated accessibility checks. Next is two weeks of real use, run locally, before deciding what comes after. The UI is deliberately plain until a design system is chosen.
 
 ---
 
@@ -63,11 +63,13 @@ Chats and notes make good "save for later" bins and bad libraries. The links are
 - **Stars survive rule changes.** When an update changes how links are cleaned, stored links are re-keyed and stars follow them.
 - **Still fast at 100,000 links:** a backup in under a second, a restore in about five, a full CSV export in under two, with the page responsive throughout.
 
-### Coming next: polish and ship (M5)
+### Built: polish (M5)
 
-- A phone layout (done: compact toolbar, 24 px tap targets, selecting by touch), empty states and a dark-mode pass
-- An accessibility audit and Lighthouse checks
-- End-to-end browser tests in CI
+- **Phones:** a compact toolbar, tap targets of at least 24 px, and **Select** for choosing links by touch.
+- **Keyboard and screen readers:** every main flow works by keyboard alone, focus is never left on nothing, and progress, results and notices are announced.
+- **Accessibility checks:** axe passes on every screen and dialog, in light and dark. Field borders and secondary text meet WCAG contrast.
+- **A fast first screen:** its heading is in the page's HTML, so it shows before any script runs. Lighthouse scores 100 on desktop and, with real phone throttling, 100 on a phone, up from 77.
+- **Browser tests in CI:** 14 tests on desktop and phone, on every push.
 
 ### Later, after real-world use
 
@@ -100,8 +102,8 @@ Extraction is pure TypeScript with no DOM or React (enforced by lint). It runs i
 | M2 · Import | The first screen: drop a file, see progress and a summary | ✅ Done |
 | M3 · Browse | The library: search, filters, details | ✅ Done |
 | M4 · Persist & export | Manage sources, stars, settings, exports, backups | ✅ Done |
-| M5 · Polish & ship | Mobile, dark mode, accessibility, browser tests | In progress |
-| Gate | Two weeks of real use, run locally, before deciding what comes next | |
+| M5 · Polish | Mobile, dark mode, accessibility, browser tests | ✅ Done |
+| Gate | Two weeks of real use, run locally, before deciding what comes next | Next |
 | Phase 1.5 · Breadth | More sources and views | |
 | M6 · Tags | Tags and smarter search | |
 | M7 · Previews | Opt-in link previews | |
@@ -168,7 +170,9 @@ Tests use [Vitest](https://vitest.dev), in two projects: `unit` (Node, for the e
 - importing chat exports: an update and the same file twice, through the file picker, and an iPhone `.zip`;
 - a backup round trip: back up, delete everything, restore from the first screen, then restore again with nothing new;
 - settings: the theme set before the page draws, duplicates collapsed by default, and finding bare domains turned off and on;
-- the phone layout: no sideways scrolling, tap targets of at least 24 px, and selecting by touch.
+- the phone layout: no sideways scrolling, tap targets of at least 24 px, and selecting by touch;
+- the keyboard alone through every main flow, with what the screen-reader live regions say;
+- accessibility: axe (WCAG 2.2 AA) on every screen and dialog, in light and dark.
 
 - **`tests/fixtures/urls-edge-cases.txt` is the contract for finding URLs.** One case per line, `input ⇒ expected`. Adding a case is the way to report or fix an extraction bug.
 - **Fixtures come from real exports, anonymized.** Names, numbers and private links are replaced, while the format is kept byte for byte. Raw exports go in `tests/fixtures/raw/`, which is git-ignored. See [`tests/fixtures/README.md`](tests/fixtures/README.md).

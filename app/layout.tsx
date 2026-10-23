@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { shellScript } from "@/lib/shell";
 import { themeScript } from "@/lib/theme";
 import "./globals.css";
 
@@ -21,15 +22,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // The script sets data-theme before React hydrates (lib/theme.ts), so
-    // <html> may differ from what the server rendered.
+    // The script sets data-theme and data-library before React hydrates
+    // (lib/theme.ts, lib/shell.ts), so <html> may differ from what the
+    // server rendered.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script
+          dangerouslySetInnerHTML={{ __html: themeScript + shellScript }}
+        />
       </head>
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
