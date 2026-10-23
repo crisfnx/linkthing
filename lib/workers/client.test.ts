@@ -144,6 +144,20 @@ test("a load while an import is saving leaves Cancel to the import", async () =>
   expect((await loading)?.count).toBe(0); // read after the rollback
 });
 
+test("delete removes a source and its links, and says how many", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  await client.scan({ text: "https://example.com/a\nhttps://example.com/b" });
+  const { sourceId } = await client.start();
+
+  expect(await client.deleteSource(sourceId)).toEqual({ links: 2 });
+  expect(await db.sources.count()).toBe(0);
+  expect(await db.links.count()).toBe(0);
+  await expect(client.deleteSource(sourceId)).rejects.toMatchObject({
+    code: "unexpected",
+  });
+});
+
 test("a full disk is reported as such", async () => {
   const db = freshDb();
   const full = new DOMException("Quota exceeded", "QuotaExceededError");

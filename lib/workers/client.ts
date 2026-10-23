@@ -37,6 +37,8 @@ export interface ExtractClient {
   cancel(): void;
   // The whole library as rows (§5), for browsing.
   load(): Promise<LibraryRows>;
+  // A source and its links, in one transaction (§6.4).
+  deleteSource(sourceId: string): Promise<{ links: number }>;
   terminate(): void;
 }
 
@@ -107,6 +109,10 @@ export function createExtractClient(
     },
     cancel: () => send({ type: "cancel" }),
     load: async () => (await call({ type: "load" }, "rows")).rows,
+    deleteSource: async (sourceId) => {
+      const reply = await call({ type: "delete", sourceId }, "deleted");
+      return { links: reply.links };
+    },
     terminate: () => worker.terminate(),
   };
 }

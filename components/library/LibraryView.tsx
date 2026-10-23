@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useId, useRef, useState } from "react";
 import type { LinkVaultDb } from "@/lib/db/schema";
+import type { Source } from "@/lib/db/types";
 import type { Link } from "@/lib/extract/types";
 import { toggleStar } from "@/lib/library/details";
 import { textAt, type LibraryRows } from "@/lib/library/rows";
@@ -18,18 +19,27 @@ import {
   type Sort,
 } from "@/lib/query/view";
 import { strings } from "@/lib/strings";
+import type { ExtractClient } from "@/lib/workers/client";
 import { DetailsDrawer } from "./DetailsDrawer";
 import { FacetPanel } from "./FacetPanel";
 import { LinkList } from "./LinkList";
+import { SourcesDialog } from "./SourcesDialog";
 
 interface Props {
   db: LinkVaultDb; // the page's connection: full links by id, and stars
   rows: LibraryRows;
   sourceNames: ReadonlyMap<string, string>;
+  sources: readonly Source[]; // for the Sources dialog
+  connect: () => ExtractClient; // the page's worker: deletes run there
 }
 
 const control =
   "rounded-md border border-current/40 bg-transparent px-2 py-1.5";
+
+// One empty set, not a new one per render: the view is worked out again
+// only when its inputs change, and a fresh set would count as a change, so
+// every render (a notice, the sources table) would redo all the rows.
+const NO_KEYS: ReadonlySet<number> = new Set();
 
 // Typing in these doesn't jump to the search box.
 function isTyping(target: EventTarget | null): boolean {
@@ -43,7 +53,13 @@ function isTyping(target: EventTarget | null): boolean {
 // Search, sort, duplicates and filters over the list (§6.3). The search text
 // is deferred: the box takes every keystroke at once and the list follows as
 // soon as it can, which at 50 k links is the next frame or two (§8.6).
-export function LibraryView({ db, rows, sourceNames }: Props) {
+export function LibraryView({
+  db,
+  rows,
+  sourceNames,
+  sources,
+  connect,
+}: Props) {
   // The view lives in the address (§6.3): read once here, written back below.
   const [query, setQuery] = useState<Query>(() =>
     queryFromSearch(window.location.search),
@@ -55,8 +71,9 @@ export function LibraryView({ db, rows, sourceNames }: Props) {
     rows: LibraryRows;
     keys: ReadonlySet<number>;
   }>({ rows, keys: new Set() });
-  const openKeys = open.rows === rows ? open.keys : new Set<number>();
+  const openKeys = open.rows === rows ? open.keys : NO_KEYS;
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   // The link whose details are open, kept with the rows it belongs to.
   const [details, setDetails] = useState<{
     rows: LibraryRows;
@@ -230,6 +247,13 @@ export function LibraryView({ db, rows, sourceNames }: Props) {
         >
           {chosen > 0 ? strings.filtersOn(chosen) : strings.filters}
         </button>
+        <button
+          type="button"
+          className={control}
+          onClick={() => setSourcesOpen(true)}
+        >
+          {strings.sources.button}
+        </button>
       </div>
       <p role="status" className="px-4 py-2 text-sm text-foreground/65">
         {strings.showing(view.matching, rows.count, view.unique)}
@@ -298,7 +322,28 @@ export function LibraryView({ db, rows, sourceNames }: Props) {
           notice={said}
         />
       )}
-      {detailsRow === null && said}
+      {sourcesOpen && (
+        <SourcesDialog
+          db={db}
+          connect={connect}
+          sources={[...sources].sort((a, b) => b.importedAt - a.importedAt)}
+          onDeleted={(sourceId) =>
+            // A filter on a source that's gone would show nothing.
+            setQuery((current) =>
+              current.sources.includes(sourceId)
+                ? {
+                    ...current,
+                    sources: current.sources.filter((id) => id !== sourceId),
+                  }
+                : current,
+            )
+          }
+          onClose={() => setSourcesOpen(false)}
+          say={say}
+          notice={said}
+        />
+      )}
+      {detailsRow === null && !sourcesOpen && said}
 
       {filtersOpen && (
         <dialog

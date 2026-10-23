@@ -75,6 +75,7 @@ function fakeClient(results: Imported[] = [imported()]) {
     cancel: vi.fn(),
     terminate: vi.fn(),
     load: vi.fn(),
+    deleteSource: vi.fn(),
   } satisfies ExtractClient;
   return client;
 }

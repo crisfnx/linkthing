@@ -4,6 +4,7 @@ import type { ImportOptions } from "@/lib/import/options";
 import { saveImport } from "@/lib/import/save";
 import { scanInput, type Scan } from "@/lib/import/scan";
 import { loadRows, transferablesOf } from "@/lib/library/rows";
+import { deleteSource } from "@/lib/library/sources";
 import type {
   WorkerErrorCode,
   WorkerRequest,
@@ -30,6 +31,11 @@ function errorCode(error: unknown, signal: AbortSignal): WorkerErrorCode {
   if (error instanceof InputError) return error.code;
   if (isQuotaError(error)) return "quota-exceeded";
   return "unexpected";
+}
+
+function unexpected(id: number, error: unknown): WorkerResponse {
+  const message = error instanceof Error ? error.message : String(error);
+  return { id, type: "error", code: "unexpected", message };
 }
 
 // The worker's side of the protocol, kept apart from extract.worker.ts so it
@@ -69,15 +75,20 @@ export function createHandler({ db, post }: WorkerContext) {
       case "cancel":
         running?.abort();
         return;
+      // Neither goes through run(): that would make it what Cancel stops.
       case "load":
-        // Not through run(): that would make the load what Cancel stops.
         try {
           const rows = await loadRows(db);
           return post({ id, type: "rows", rows }, transferablesOf(rows));
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          return post({ id, type: "error", code: "unexpected", message });
+          return post(unexpected(id, error));
+        }
+      case "delete":
+        try {
+          const { links } = await deleteSource(db, request.sourceId);
+          return post({ id, type: "deleted", links });
+        } catch (error) {
+          return post(unexpected(id, error));
         }
       case "scan":
         scanned = undefined;
