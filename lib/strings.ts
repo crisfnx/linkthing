@@ -241,10 +241,31 @@ export const strings = {
   libraryFailed: (message: string) =>
     `Couldn't read your library (${message}). Reload the page to try again.`,
 
-  sourcesHeading: "Your sources",
-  sourceKind: (kind: Source["kind"]) => KINDS[kind],
-  sourceLinks: (links: number) => count(links, "link"),
-  sourceImported: (at: number) => `imported ${day.format(at)}`,
+  // Managing sources (§6.4).
+  sources: {
+    button: "Sources",
+    title: (n: number) => `Sources (${number.format(n)})`,
+    kind: (kind: Source["kind"]) => KINDS[kind],
+    links: (links: number) => count(links, "link"),
+    imported: (at: number) => `imported ${day.format(at)}`,
+    updated: (at: number) => `updated ${day.format(at)}`,
+    rename: "Rename",
+    renameLabel: (name: string) => `New name for “${name}”`,
+    save: "Save",
+    cancel: "Cancel",
+    nameEmpty: "A name can't be empty.",
+    nameTooLong: (max: number) =>
+      `A name can be at most ${number.format(max)} characters.`,
+    delete: "Delete",
+    confirmDelete: (name: string, links: number) =>
+      `Delete “${name}” and its ${count(links, "link")}? Stars stay, for if you import these links again.`,
+    keep: "Keep it",
+    deleting: (name: string) => `Deleting “${name}”…`,
+    deleted: (name: string, links: number) =>
+      `Deleted “${name}” and ${count(links, "link")}.`,
+    deleteFailed: (name: string) =>
+      `Couldn't delete “${name}”, so nothing was removed. Try again.`,
+  },
 
   upgradeNeeded:
     "LinkVault was updated in another tab. Reload this page to keep going.",

@@ -10,9 +10,11 @@ import {
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
+import type { Source } from "@/lib/db/types";
 import type { Link } from "@/lib/extract/types";
 import { describeUrl } from "@/lib/extract/url/describe";
 import { RowsBuilder, type LibraryRows } from "@/lib/library/rows";
+import type { ExtractClient } from "@/lib/workers/client";
 import { LibraryView } from "./LibraryView";
 
 // jsdom lays nothing out: a screenful for the list (see LinkList.test.tsx).
@@ -92,9 +94,27 @@ const titles = () =>
     .getAllByRole("listitem")
     .map((li) => within(li).getByRole("link").textContent?.split(",")[0]);
 
+// A worker stand-in: only the Sources dialog's delete reaches it here.
+const noWorker = (): ExtractClient =>
+  ({
+    deleteSource: vi.fn(async () => ({ links: 0 })),
+  }) as unknown as ExtractClient;
+
 // The list needs only the rows; the details drawer reads the stored link.
-function renderView(db = freshDb(), rows = library()) {
-  render(<LibraryView db={db} rows={rows} sourceNames={sourceNames} />);
+function renderView(
+  db = freshDb(),
+  rows = library(),
+  { sources = [] as Source[], connect = noWorker } = {},
+) {
+  render(
+    <LibraryView
+      db={db}
+      rows={rows}
+      sourceNames={sourceNames}
+      sources={sources}
+      connect={connect}
+    />,
+  );
   return {
     search: screen.getByRole("searchbox", { name: "Search links" }),
     count: () =>
@@ -420,4 +440,43 @@ describe("the address", () => {
     });
     expect(window.location.href).toBe("http://localhost:3000/");
   });
+});
+
+test("Sources opens the dialog; deleting a source drops a filter on it", async () => {
+  window.history.replaceState(null, "", "/?source=notes");
+  const deleteSource = vi.fn(async () => ({ links: 1 }));
+  const connect = () => ({ deleteSource }) as unknown as ExtractClient;
+  const notes: Source = {
+    id: "notes",
+    name: "Notes",
+    kind: "plaintext",
+    adapterVersion: 1,
+    importedAt: at(2026, 1, 1),
+    updatedAt: at(2026, 1, 1),
+    stats: {
+      messages: 1,
+      links: 1,
+      uniqueLinks: 1,
+      domains: 1,
+      skippedNonWeb: 0,
+    },
+    options: {},
+  };
+  renderView(freshDb(), library(), { sources: [notes], connect });
+  expect(titles()).toEqual(["Getting started"]);
+
+  fireEvent.click(screen.getByRole("button", { name: "Sources" }));
+  const dialog = screen.getByRole("dialog", { name: "Sources (1)" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+  await act(async () => {
+    fireEvent.click(
+      within(dialog).getAllByRole("button", { name: "Delete" }).at(-1)!,
+    );
+  });
+
+  expect(deleteSource).toHaveBeenCalledWith("notes");
+  expect(window.location.search).toBe("");
+  expect(within(dialog).getByRole("status").textContent).toBe(
+    "Deleted “Notes” and 1 link.",
+  );
 });

@@ -68,6 +68,8 @@ export default function Workspace() {
                     db={db}
                     rows={library.rows}
                     sourceNames={sourceNames}
+                    sources={sources}
+                    connect={connect}
                   />
                 ))}
             </div>
