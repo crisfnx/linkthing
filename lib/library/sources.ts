@@ -58,3 +58,22 @@ export async function deleteSource(
     },
   );
 }
+
+// Settings → "Delete everything" (§6.4): every source, part, link and
+// annotation, and what M7 and M8 add, in one transaction. Settings stay.
+// Clearing a table is one operation however many rows it holds, so this
+// runs on the page.
+export async function deleteEverything(db: LinkVaultDb): Promise<void> {
+  const data = [
+    db.sources,
+    db.sourceParts,
+    db.links,
+    db.annotations,
+    db.enrichments,
+    db.tags,
+    db.classifications,
+  ];
+  await db.transaction("rw", data, () =>
+    Promise.all(data.map((table) => table.clear())),
+  );
+}

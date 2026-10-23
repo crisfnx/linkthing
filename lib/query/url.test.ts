@@ -21,6 +21,7 @@ describe("the view as a query string", () => {
       senders: ["Ana", ""],
       sources: ["58031e6c-15fd-4e24-b134-f142a9382296"],
       dates: ["2026", "2025-12", ""],
+      starred: true,
       sort: "oldest",
       dedupe: true,
     });
@@ -28,7 +29,7 @@ describe("the view as a query string", () => {
     expect(search).toBe(
       "q=lisbon+trams&site=wikipedia.org&site=theguardian.com&kind=video&kind=social" +
         "&sender=Ana&sender=&source=58031e6c-15fd-4e24-b134-f142a9382296" +
-        "&date=2026&date=2025-12&date=&sort=oldest&dedupe=1",
+        "&date=2026&date=2025-12&date=&starred=1&sort=oldest&dedupe=1",
     );
     expect(queryFromSearch(`?${search}`)).toEqual(full);
   });
@@ -45,6 +46,15 @@ describe("the view as a query string", () => {
       ),
     ).toEqual(query({ kinds: ["video"] }));
   });
+});
+
+test("duplicates follow the default unless the address says otherwise", () => {
+  const collapsing = query({ dedupe: true }); // Settings: collapse by default
+  expect(queryFromSearch("", collapsing).dedupe).toBe(true);
+  expect(queryFromSearch("?dedupe=0", collapsing).dedupe).toBe(false);
+  expect(queryFromSearch("?dedupe=1").dedupe).toBe(true);
+  expect(searchFromQuery(collapsing, collapsing)).toBe("");
+  expect(searchFromQuery(query({}), collapsing)).toBe("dedupe=0");
 });
 
 test("an address naming twitter.com finds X's links, now shown as x.com", () => {

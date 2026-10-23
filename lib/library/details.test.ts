@@ -2,7 +2,12 @@ import Dexie from "dexie";
 import { afterEach, describe, expect, test } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { describeUrl } from "@/lib/extract/url/describe";
-import { markLink, removedByCleaning, toggleStar } from "./details";
+import {
+  markLink,
+  removedByCleaning,
+  starredKeys,
+  toggleStar,
+} from "./details";
 
 const opened: Dexie[] = [];
 
@@ -87,10 +92,12 @@ describe("the star", () => {
     expect(await toggleStar(db, link)).toBe(true);
     expect(await db.annotations.get(link.urlKey)).toMatchObject({
       url: link.url,
-      starred: true,
+      starred: 1,
     });
+    expect(await starredKeys(db)).toEqual([link.urlKey]);
     expect(await toggleStar(db, link)).toBe(false);
     expect(await db.annotations.count()).toBe(0);
+    expect(await starredKeys(db)).toEqual([]);
   });
 
   test("unstarring keeps the rest of the annotation", async () => {
@@ -99,14 +106,16 @@ describe("the star", () => {
       urlKey: link.urlKey,
       url: "https://twitter.com/a/status/1",
       tags: ["recipes"],
-      starred: true,
+      starred: 1,
       updatedAt: 1,
     });
     expect(await toggleStar(db, link)).toBe(false);
-    expect(await db.annotations.get(link.urlKey)).toMatchObject({
+    const kept = await db.annotations.get(link.urlKey);
+    expect(kept).toMatchObject({
       url: "https://twitter.com/a/status/1", // the first as-found URL stays
       tags: ["recipes"],
-      starred: false,
     });
+    expect(kept).not.toHaveProperty("starred");
+    expect(await starredKeys(db)).toEqual([]);
   });
 });

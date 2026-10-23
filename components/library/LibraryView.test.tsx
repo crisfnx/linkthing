@@ -216,6 +216,69 @@ test("collapsed duplicates show how often, and open to the copies", () => {
   expect(titles()).toHaveLength(4);
 });
 
+test("Settings can collapse duplicates by default; the address says when not", () => {
+  const db = freshDb();
+  const view = (dedupeByDefault: boolean) => (
+    <LibraryView
+      db={db}
+      rows={library()}
+      sourceNames={sourceNames}
+      sources={[]}
+      connect={noWorker}
+      dedupeByDefault={dedupeByDefault}
+    />
+  );
+  const { rerender } = render(view(true));
+  const collapse = screen.getByRole("checkbox", {
+    name: "Collapse duplicates",
+  });
+  expect(titles()).toHaveLength(3);
+  expect(window.location.search).toBe("");
+
+  fireEvent.click(collapse);
+  expect(titles()).toHaveLength(4);
+  expect(window.location.search).toBe("?dedupe=0");
+
+  // A new default applies to the view on screen, and the address follows.
+  fireEvent.click(collapse);
+  rerender(view(false));
+  expect(titles()).toHaveLength(4);
+  expect(window.location.search).toBe("");
+});
+
+test("stars: a star marks its rows, and Starred shows just those", async () => {
+  const db = freshDb();
+  const all = links();
+  await db.annotations.put({
+    urlKey: all[0]!.urlKey, // the video, shared twice
+    url: all[0]!.url,
+    starred: 1,
+    updatedAt: 1,
+  });
+  renderView(db, rowsOf(all));
+  const starredOnly = await screen.findByRole("checkbox", {
+    name: /^Starred/,
+  });
+  expect(
+    screen
+      .getAllByRole("listitem")
+      .map((item) => item.textContent?.includes("Starred")),
+  ).toEqual([true, false, true, false]);
+
+  fireEvent.click(starredOnly);
+  expect(titles()).toEqual(["YouTube video", "YouTube video"]);
+  expect(window.location.search).toBe("?starred=1");
+  expect(
+    screen.getByRole("button", { name: "Filters (1)", hidden: true }),
+  ).toBeTruthy();
+});
+
+test("with nothing starred there's no Starred filter", async () => {
+  renderView();
+  await act(async () => {}); // the stars' live query
+  expect(screen.queryByRole("checkbox", { name: /^Starred/ })).toBeNull();
+});
+
 test("nothing matches: say so, and offer to clear", () => {
   const { search } = renderView();
   fireEvent.change(search, { target: { value: "nowhere-at-all" } });
@@ -346,7 +409,7 @@ describe("details", () => {
     fireEvent.click(star);
     await waitFor(() => expect(star.getAttribute("aria-pressed")).toBe("true"));
     expect(await db.annotations.get(shared.urlKey)).toMatchObject({
-      starred: true,
+      starred: 1,
     });
     // Inside the dialog: outside a modal dialog it would be inert, unheard.
     expect(

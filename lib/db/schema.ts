@@ -5,9 +5,9 @@ import type {
   Classification,
   Enrichment,
   Meta,
-  Settings,
   Source,
   SourcePart,
+  StoredSettings,
   Tag,
 } from "./types";
 
@@ -21,7 +21,7 @@ export type LinkVaultDb = Dexie & {
   enrichments: EntityTable<Enrichment, "urlKey">;
   tags: EntityTable<Tag, "id">;
   classifications: EntityTable<Classification, "urlKey">;
-  settings: EntityTable<Settings | Meta, "key">;
+  settings: EntityTable<StoredSettings | Meta, "key">;
 };
 
 export function createDb(
@@ -42,6 +42,21 @@ export function createDb(
     classifications: "urlKey, promptVersion, *tagIds",
     settings: "key", // the 'settings' and 'meta' rows
   });
+
+  // v2: a star is stored as 1. IndexedDB can't index booleans, so v1's
+  // `starred: true` never reached the starred index; the Starred filter
+  // reads that index.
+  db.version(2)
+    .stores({ annotations: "urlKey, starred, *tags" })
+    .upgrade((tx) =>
+      tx
+        .table<{ starred?: boolean | 1 }>("annotations")
+        .toCollection()
+        .modify((annotation) => {
+          if (annotation.starred) annotation.starred = 1;
+          else delete annotation.starred;
+        }),
+    );
 
   // When another tab opens a newer schema, Dexie closes this connection so the
   // upgrade isn't blocked. This tab's code still knows only the old schema, so

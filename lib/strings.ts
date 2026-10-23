@@ -22,6 +22,24 @@ const megabytes = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });
 const mb = (bytes: number) => megabytes.format(bytes / 1_000_000);
+const sizeIn = (unit: string, digits: number) =>
+  new Intl.NumberFormat(undefined, {
+    style: "unit",
+    unit,
+    maximumFractionDigits: digits,
+  });
+const SIZES = [
+  { below: 1e6, per: 1e3, format: sizeIn("kilobyte", 0) },
+  { below: 1e9, per: 1e6, format: sizeIn("megabyte", 0) },
+  { below: 1e10, per: 1e9, format: sizeIn("gigabyte", 1) },
+  { below: 1e12, per: 1e9, format: sizeIn("gigabyte", 0) },
+  { below: Infinity, per: 1e12, format: sizeIn("terabyte", 1) },
+];
+// Storage as people read it: 840 kB, 41 MB, 1.2 GB, 300 GB, 1.2 TB.
+function size(bytes: number): string {
+  const { per, format } = SIZES.find(({ below }) => bytes < below)!;
+  return format.format(bytes / per);
+}
 
 function count(n: number, one: string, many = `${one}s`): string {
   return `${number.format(n)} ${n === 1 ? one : many}`;
@@ -80,7 +98,10 @@ export const strings = {
     remaining === 0
       ? `Importing ${label}`
       : `Importing ${label} (${count(remaining, "more file")} after this)`,
-  reextracting: (name: string) => `Re-extracting “${name}”`,
+  reextracting: (name: string, remaining = 0) =>
+    remaining === 0
+      ? `Re-extracting “${name}”`
+      : `Re-extracting “${name}” (${count(remaining, "more source")} after this)`,
   reextractFailed: (name: string) =>
     `Something went wrong re-extracting “${name}”, and it was left as it was.`,
   progressLabel: "Import progress",
@@ -182,6 +203,7 @@ export const strings = {
     sources: "Sources",
     dates: "Dates",
   },
+  starredOnly: "Starred",
   clear: "Clear",
   clearAll: "Clear search and filters",
   showAllSites: (n: number) => `Show all ${count(n, "site")}`,
@@ -289,6 +311,71 @@ export const strings = {
       `Deleted “${name}” and ${count(links, "link")}.`,
     deleteFailed: (name: string) =>
       `Couldn't delete “${name}”, so nothing was removed. Try again.`,
+  },
+
+  // Settings (§6.7).
+  settings: {
+    button: "Settings",
+    title: "Settings",
+    appearance: "Appearance",
+    theme: "Theme",
+    themes: {
+      system: "Match the system",
+      light: "Light",
+      dark: "Dark",
+    } satisfies Record<"system" | "light" | "dark", string>,
+    importing: "Importing",
+    dateOrder: "When a chat's dates could be read either way, suggest",
+    order: (order: "DMY" | "MDY") =>
+      ({
+        DMY: "Day first (31/12/2026)",
+        MDY: "Month first (12/31/2026)",
+      })[order],
+    bareDomains: "Find bare domains",
+    bareNote: (links: number) =>
+      `Links written without https:// or www., like example.com/page. ${
+        links === 1
+          ? "1 link in your library was"
+          : `${count(links, "link")} in your library were`
+      } found this way.`,
+    bareOff: (links: number, sources: number) =>
+      `Turn it off? This removes the ${count(links, "link")} found without https:// and reads ${count(sources, "source")} again. Stars stay.`,
+    bareOn: (sources: number) =>
+      `Turn it on? This reads ${
+        sources === 1 ? "your source" : `all ${count(sources, "source")}`
+      } again to find them.`,
+    turnOff: "Turn off",
+    turnOn: "Turn on",
+    cancel: "Cancel",
+    waitForImport: "Wait for the import to finish first.",
+    list: "List",
+    dedupe: "Collapse duplicates when the library opens",
+    storage: "Storage",
+    // True while nothing is sent anywhere (§2). Previews (M7) and AI tagging
+    // (M8) send data once turned on: this has to say so then.
+    local:
+      "Your library stays on this device: it's kept in this browser and never uploaded anywhere.",
+    // Usage is what the library takes now; quota is the browser's ceiling
+    // for this site, a share of the disk that differs by browser.
+    using: (usage: number, quota: number) =>
+      `LinkVault is using ${size(usage)} so far. That grows with each import, and this browser lets it use up to about ${size(quota)}.`,
+    usageUnknown: "This browser doesn't say how much storage LinkVault uses.",
+    kept: "Your browser has agreed to keep your library until you delete it.",
+    notKept:
+      "Your browser may clear your library when space runs low, and Safari after 7 days without a visit.",
+    askToKeep: "Ask the browser to keep it",
+    refused:
+      "The browser said no. Chrome decides from how much the site is used, so it may agree later.",
+    deleteEverything: "Delete everything",
+    deleteNote:
+      "Removes every source, link and star from this browser. Settings stay.",
+    confirmDelete: (sources: number, links: number, stars: number) =>
+      `Delete ${count(sources, "source")}, ${count(links, "link")} and ${count(stars, "star")}? This can't be undone.`,
+    deleting: "Deleting everything…",
+    deleteFailed:
+      "Couldn't delete everything, so nothing was removed. Try again.",
+    keep: "Keep it",
+    close: "Close",
   },
 
   upgradeNeeded:

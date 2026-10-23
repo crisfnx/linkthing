@@ -35,6 +35,7 @@ interface RowProps {
   // once), or 0 for a copy shown under an expanded one.
   copies?: number;
   open: boolean;
+  starred: boolean;
   linkRef?: Ref<HTMLAnchorElement>;
   onActivate: (position: number) => void;
   onToggleCopies: (row: number) => void;
@@ -42,9 +43,9 @@ interface RowProps {
 }
 
 // One link: a site badge (favicons arrive with M7), the title, or the URL
-// when there's none, then the kind, URL, sender and source, and the date.
-// A link shared more than once shows how often; its copies sit indented
-// under it when opened. Compiled as usual, so rows that stay on screen don't
+// when there's none, then the kind, URL, sender and source, a star when
+// it's starred, and the date. A link shared more than once shows how often;
+// its copies sit indented under it when opened. Compiled as usual, so rows that stay on screen don't
 // redraw on scroll.
 function LinkRow({
   rows,
@@ -57,6 +58,7 @@ function LinkRow({
   sourceName,
   copies,
   open,
+  starred,
   linkRef,
   onActivate,
   onToggleCopies,
@@ -136,6 +138,12 @@ function LinkRow({
           {strings.copies(copies)}
         </button>
       )}
+      {starred && (
+        <span className="shrink-0 text-sm leading-none">
+          <span aria-hidden>★</span>
+          <span className="sr-only">{strings.details.starred}</span>
+        </span>
+      )}
       {!Number.isNaN(time) && (
         <time
           dateTime={new Date(time).toISOString()}
@@ -153,6 +161,7 @@ interface Props {
   order: Uint32Array; // the rows to show, in order (lib/query/view.ts)
   copies: Uint32Array | null; // per shown row, with duplicates collapsed
   openKeys: ReadonlySet<number>; // keys whose copies are shown
+  starred: Uint8Array | null; // per key (starredFlags)
   onToggleCopies: (key: number) => void;
   sourceNames: ReadonlyMap<string, string>;
   // The focused row: Enter or a click opens it, o opens the link, c copies
@@ -171,6 +180,7 @@ export function LinkList({
   order,
   copies,
   openKeys,
+  starred,
   onToggleCopies,
   sourceNames,
   onOpen,
@@ -268,6 +278,7 @@ export function LinkList({
               }
               copies={copies?.[index]}
               open={openKeys.has(rows.keys[row]!)}
+              starred={starred?.[rows.keys[row]!] === 1}
               linkRef={
                 index === current
                   ? (link) => {

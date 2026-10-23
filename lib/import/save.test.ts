@@ -417,7 +417,7 @@ describe("a replace, for a file that isn't a chat (§6.1)", () => {
   test("stars stay, by the link's address", async () => {
     const { db, kept } = await replaced();
     expect(await db.annotations.get(kept.urlKey)).toMatchObject({
-      starred: true,
+      starred: 1,
     });
   });
 

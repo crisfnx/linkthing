@@ -9,6 +9,9 @@ import { strings } from "@/lib/strings";
 
 interface Props {
   scan: ScanResult;
+  // The answer preselected for dates that fit both orders: Settings' default
+  // (§6.7), else the browser language's order.
+  defaultDateOrder?: DateOrder;
   // null: don't import this one.
   onDecide: (choice: ImportChoice | null) => void;
 }
@@ -41,7 +44,7 @@ function Choice(props: {
 //
 // The browser's own <dialog>: showModal() keeps focus inside it, makes the
 // page behind it inert, closes it on Esc and puts focus back afterwards.
-export function ImportDialog({ scan, onDecide }: Props) {
+export function ImportDialog({ scan, defaultDateOrder, onDecide }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   // Set on submit; Esc and "Don't import" close the dialog without one.
   const answer = useRef<ImportChoice | null>(null);
@@ -56,8 +59,8 @@ export function ImportDialog({ scan, onDecide }: Props) {
   // version of the same notes (§6.1). Stars survive it either way.
   const [asReplace, setAsReplace] = useState(replace !== undefined);
   const [kind, setKind] = useState<SourceKind>(offered);
-  const [dateOrder, setDateOrder] = useState<DateOrder>(() =>
-    dateOrderFor(navigator.language),
+  const [dateOrder, setDateOrder] = useState<DateOrder>(
+    () => defaultDateOrder ?? dateOrderFor(navigator.language),
   );
 
   // Once, even when React runs effects twice in development. The browser

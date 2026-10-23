@@ -3,7 +3,8 @@ import { zipSync } from "fflate";
 import { afterEach, expect, test, vi } from "vitest";
 import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import type { ImportProgress } from "@/lib/import/options";
-import { textAt, type LibraryRows } from "@/lib/library/rows";
+import { BARE, textAt, type LibraryRows } from "@/lib/library/rows";
+import { saveSettings } from "@/lib/settings";
 import { createExtractClient, WorkerError, type WorkerPort } from "./client";
 import { createHandler } from "./handle";
 import type { WorkerRequest } from "./protocol";
@@ -186,4 +187,27 @@ test("reextract reads a stored source again, with progress", async () => {
     expect.arrayContaining(["reading", "parsing", "extracting", "saving"]),
   );
   expect(await db.links.count()).toBe(2);
+});
+
+test("imports and re-extracts follow Settings → Find bare domains", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  const text = "see example.com/page and https://example.org/a";
+  const bareRows = async () => {
+    const rows = await client.load();
+    return Array.from(rows.flags).filter((flags) => flags & BARE).length;
+  };
+
+  await client.scan({ text });
+  const { sourceId } = await client.start({});
+  expect(await bareRows()).toBe(1);
+
+  await saveSettings(db, { findBareDomains: false });
+  const again = await client.reextract(sourceId, {});
+  expect(again.stats.links).toBe(1);
+  expect(await bareRows()).toBe(0);
+
+  await client.scan({ text: `${text}\nmore` });
+  await client.start({});
+  expect(await bareRows()).toBe(0);
 });

@@ -2,6 +2,7 @@
 // out of a URL, where the link sits in its message, and the star (§5,
 // Annotation). Runs on the page, for one link at a time.
 import type { LinkVaultDb } from "@/lib/db/schema";
+import type { Annotation } from "@/lib/db/types";
 import type { Link } from "@/lib/extract/types";
 
 function paramNames(url: string): string[] {
@@ -76,14 +77,22 @@ export async function toggleStar(
     if (!starred && otherwiseEmpty) {
       await db.annotations.delete(link.urlKey);
     } else {
-      await db.annotations.put({
+      const next: Annotation = {
         ...existing,
         urlKey: link.urlKey,
         url: existing?.url ?? link.url,
-        starred,
         updatedAt: Date.now(),
-      });
+      };
+      if (starred) next.starred = 1;
+      else delete next.starred;
+      await db.annotations.put(next);
     }
     return starred;
   });
+}
+
+// The urlKeys of every starred link, from the starred index: keys only, so
+// a live query on it stays cheap however many links there are.
+export async function starredKeys(db: LinkVaultDb): Promise<string[]> {
+  return db.annotations.where("starred").equals(1).primaryKeys();
 }

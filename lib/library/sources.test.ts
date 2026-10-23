@@ -5,8 +5,10 @@ import { createDb, type LinkVaultDb } from "@/lib/db/schema";
 import { saveImport } from "@/lib/import/save";
 import { scanInput } from "@/lib/import/scan";
 import { toggleStar } from "./details";
+import { readSettings, saveSettings } from "@/lib/settings";
 import {
   cleanSourceName,
+  deleteEverything,
   deleteSource,
   renameSource,
   SourceNameError,
@@ -131,7 +133,7 @@ describe("deleting", () => {
 
     await deleteSource(db, sourceId);
     expect(await db.annotations.get(link.urlKey)).toMatchObject({
-      starred: true,
+      starred: 1,
     });
   });
 
@@ -150,4 +152,18 @@ describe("deleting", () => {
       "No source nope",
     );
   });
+});
+
+test("delete everything: sources, parts, links and stars go; settings stay", async () => {
+  const db = freshDb();
+  await importFixture(db, "whatsapp-update-older.txt");
+  const { sourceId } = await importFixture(db, "plaintext.txt");
+  const link = (await db.links.where("sourceId").equals(sourceId).first())!;
+  await toggleStar(db, link);
+  await saveSettings(db, { theme: "dark" });
+
+  await deleteEverything(db);
+  expect(await counts(db)).toEqual({ sources: 0, parts: 0, links: 0 });
+  expect(await db.annotations.count()).toBe(0);
+  expect((await readSettings(db)).theme).toBe("dark");
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useImport, type Decide, type ImportState } from "@/hooks/useImport";
+import type { DateOrder } from "@/lib/extract/types";
 import type { ImportChoice } from "@/lib/import/save";
 import type { ScanResult } from "@/lib/import/scan";
 import { strings } from "@/lib/strings";
@@ -21,6 +22,9 @@ interface Props {
   // The library has links: the list takes the page (children), and the ways
   // in move behind an Import button.
   library?: boolean;
+  actions?: ReactNode; // the library's header, before Import: Settings
+  // The dialog's answer for dates that fit both orders (Settings, §6.7).
+  defaultDateOrder?: DateOrder;
   children?: ReactNode;
 }
 
@@ -54,6 +58,8 @@ export function Importer({
   connect,
   empty = false,
   library = false,
+  actions,
+  defaultDateOrder,
   children,
 }: Props) {
   // The question the dialog is asking, and where its answer goes.
@@ -109,6 +115,7 @@ export function Importer({
       {asking && (
         <ImportDialog
           scan={asking.scan}
+          defaultDateOrder={defaultDateOrder}
           onDecide={(choice) => {
             setAsking(null);
             asking.answer(choice);
@@ -146,51 +153,54 @@ export function Importer({
     const finished = !running && state.status !== "idle";
     return (
       <DropZone disabled={running} onFiles={importFiles} onText={importText}>
-        <div className="flex h-dvh flex-col">
-          <header className="flex items-center justify-between gap-4 border-b border-current/15 px-4 py-3">
-            <h1 className="text-xl font-bold">{strings.appName}</h1>
-            <button
-              ref={returnFocus}
-              type="button"
-              className={`${button} aria-disabled:opacity-50`}
-              aria-disabled={running}
-              onClick={() => {
-                if (!running) setPanelOpen(true);
-              }}
-            >
-              {strings.importButton}
-            </button>
-          </header>
-          {panelOpen && (
-            <ImportPanel
-              busy={running}
-              onFiles={importFiles}
-              onText={importText}
-              onClose={() => setPanelOpen(false)}
-            />
-          )}
-          {announced}
-          {state.status !== "idle" && (
-            <div className="flex max-h-[40dvh] shrink-0 flex-col gap-4 overflow-y-auto border-b border-current/15 px-4 py-4">
-              {outcome}
-              {finished && (
-                <div>
-                  <button type="button" className={button} onClick={dismiss}>
-                    {strings.dismiss}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          <ImportFlowContext
-            value={{
-              busy: running,
-              reextract: (source, choice) => void reextract(source, choice),
-            }}
-          >
+        <ImportFlowContext
+          value={{
+            busy: running,
+            reextract: (sources, choice) => void reextract(sources, choice),
+          }}
+        >
+          <div className="flex h-dvh flex-col">
+            <header className="flex items-center justify-between gap-4 border-b border-current/15 px-4 py-3">
+              <h1 className="text-xl font-bold">{strings.appName}</h1>
+              <div className="flex items-center gap-2">
+                {actions}
+                <button
+                  ref={returnFocus}
+                  type="button"
+                  className={`${button} aria-disabled:opacity-50`}
+                  aria-disabled={running}
+                  onClick={() => {
+                    if (!running) setPanelOpen(true);
+                  }}
+                >
+                  {strings.importButton}
+                </button>
+              </div>
+            </header>
+            {panelOpen && (
+              <ImportPanel
+                busy={running}
+                onFiles={importFiles}
+                onText={importText}
+                onClose={() => setPanelOpen(false)}
+              />
+            )}
+            {announced}
+            {state.status !== "idle" && (
+              <div className="flex max-h-[40dvh] shrink-0 flex-col gap-4 overflow-y-auto border-b border-current/15 px-4 py-4">
+                {outcome}
+                {finished && (
+                  <div>
+                    <button type="button" className={button} onClick={dismiss}>
+                      {strings.dismiss}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {children}
-          </ImportFlowContext>
-        </div>
+          </div>
+        </ImportFlowContext>
       </DropZone>
     );
   }

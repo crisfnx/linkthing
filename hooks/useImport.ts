@@ -124,12 +124,15 @@ export function useImport({ connect, decide = acceptScan }: Options) {
     importFiles: (files: File[]) =>
       importAll(files.map((file) => ({ label: file.name, input: { file } }))),
     reextract: (
-      source: { id: string; name: string },
+      sources: readonly { id: string; name: string }[],
       choice: ReextractChoice,
     ) =>
-      importAll([
-        { label: source.name, reextract: { sourceId: source.id, choice } },
-      ]),
+      importAll(
+        sources.map((source) => ({
+          label: source.name,
+          reextract: { sourceId: source.id, choice },
+        })),
+      ),
     importText: (text: string) =>
       importAll(
         text.trim() === ""

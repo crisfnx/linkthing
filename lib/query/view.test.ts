@@ -2,7 +2,12 @@ import { describe, expect, test } from "vitest";
 import { extractLinks } from "@/lib/extract/pipeline";
 import type { Link } from "@/lib/extract/types";
 import { describeUrl } from "@/lib/extract/url/describe";
-import { RowsBuilder, textAt, type LibraryRows } from "@/lib/library/rows";
+import {
+  RowsBuilder,
+  starredFlags,
+  textAt,
+  type LibraryRows,
+} from "@/lib/library/rows";
 import { syntheticExport } from "@/tests/synthetic";
 import { buildView, EMPTY_QUERY, searchRows, type Query } from "./view";
 
@@ -349,6 +354,67 @@ describe("duplicates", () => {
 
   test("not collapsed, no copies to count", () => {
     expect(buildView(rows, EMPTY_QUERY).copies).toBeNull();
+  });
+});
+
+describe("starred", () => {
+  const video = link("https://youtu.be/Ex4mpLeV1d0", { timestamp: 4 });
+  const rows = rowsOf([
+    video,
+    link("https://example.com/a", { timestamp: 3 }),
+    link("https://www.youtube.com/watch?v=Ex4mpLeV1d0", { timestamp: 2 }),
+  ]);
+  const starred = starredFlags(rows, [video.urlKey]);
+
+  test("starred only: every copy of a starred link, one row when collapsed", () => {
+    const query = { ...EMPTY_QUERY, starred: true };
+    const view = buildView(rows, query, undefined, starred);
+    expect(view.matching).toBe(2);
+    expect(Array.from(view.order, (r) => textAt(rows.urls, r))).toEqual([
+      "https://youtu.be/Ex4mpLeV1d0",
+      "https://www.youtube.com/watch?v=Ex4mpLeV1d0",
+    ]);
+    const collapsed = buildView(
+      rows,
+      { ...query, dedupe: true },
+      undefined,
+      starred,
+    );
+    expect(Array.from(collapsed.copies!)).toEqual([2]);
+    // The other filters count within the starred links.
+    expect(view.facets.sites.map((v) => [v.value, v.count])).toEqual([
+      ["youtube.com", 2],
+    ]);
+  });
+
+  test("its count follows the other filters, as every facet's does", () => {
+    const all = buildView(rows, EMPTY_QUERY, undefined, starred);
+    expect(all.facets.starred).toBe(2);
+    expect(all.matching).toBe(3);
+    const elsewhere = buildView(
+      rows,
+      { ...EMPTY_QUERY, sites: ["example.com"] },
+      undefined,
+      starred,
+    );
+    expect(elsewhere.facets.starred).toBe(0);
+    // Choosing a site that has no stars still offers the site's count.
+    const both = buildView(
+      rows,
+      { ...EMPTY_QUERY, sites: ["example.com"], starred: true },
+      undefined,
+      starred,
+    );
+    expect(both.matching).toBe(0);
+    expect(both.facets.sites.map((v) => [v.value, v.count])).toEqual([
+      ["youtube.com", 2],
+      ["example.com", 0],
+    ]);
+  });
+
+  test("with no stars at all, starred only shows nothing", () => {
+    const view = buildView(rows, { ...EMPTY_QUERY, starred: true });
+    expect([view.matching, view.facets.starred]).toEqual([0, 0]);
   });
 });
 

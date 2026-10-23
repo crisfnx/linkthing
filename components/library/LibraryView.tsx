@@ -1,5 +1,6 @@
 "use client";
 
+import { useLiveQuery } from "dexie-react-hooks";
 import {
   use,
   useDeferredValue,
@@ -12,8 +13,8 @@ import { ImportFlowContext } from "@/components/import/ImportFlow";
 import type { LinkVaultDb } from "@/lib/db/schema";
 import type { Source } from "@/lib/db/types";
 import type { Link } from "@/lib/extract/types";
-import { toggleStar } from "@/lib/library/details";
-import { textAt, type LibraryRows } from "@/lib/library/rows";
+import { starredKeys, toggleStar } from "@/lib/library/details";
+import { starredFlags, textAt, type LibraryRows } from "@/lib/library/rows";
 import {
   onlyTextDiffers,
   queryFromSearch,
@@ -39,6 +40,7 @@ interface Props {
   sourceNames: ReadonlyMap<string, string>;
   sources: readonly Source[]; // for the Sources dialog
   connect: () => ExtractClient; // the page's worker: deletes run there
+  dedupeByDefault?: boolean; // Settings → "Collapse duplicates"
 }
 
 const control =
@@ -48,6 +50,12 @@ const control =
 // only when its inputs change, and a fresh set would count as a change, so
 // every render (a notice, the sources table) would redo all the rows.
 const NO_KEYS: ReadonlySet<number> = new Set();
+const NO_STARS: readonly string[] = [];
+
+// The view with nothing chosen, as Settings has it: what the address leaves
+// out (§6.3). One object each, for the same reason as NO_KEYS.
+const COLLAPSED: Query = { ...EMPTY_QUERY, dedupe: true };
+const baseQuery = (dedupe: boolean) => (dedupe ? COLLAPSED : EMPTY_QUERY);
 
 // Typing in these doesn't jump to the search box.
 function isTyping(target: EventTarget | null): boolean {
@@ -67,11 +75,19 @@ export function LibraryView({
   sourceNames,
   sources,
   connect,
+  dedupeByDefault = false,
 }: Props) {
+  const base = baseQuery(dedupeByDefault);
   // The view lives in the address (§6.3): read once here, written back below.
   const [query, setQuery] = useState<Query>(() =>
-    queryFromSearch(window.location.search),
+    queryFromSearch(window.location.search, base),
   );
+  // A new default in Settings applies to the view on screen too.
+  const [defaultShown, setDefaultShown] = useState(dedupeByDefault);
+  if (defaultShown !== dedupeByDefault) {
+    setDefaultShown(dedupeByDefault);
+    setQuery({ ...query, dedupe: dedupeByDefault });
+  }
   const inAddress = useRef(query);
   const text = useDeferredValue(query.text);
   // Opened groups of copies, for these rows; a new read starts closed.
@@ -97,14 +113,19 @@ export function LibraryView({
   const search = useRef<HTMLInputElement>(null);
   const filtersDialog = useRef<HTMLDialogElement>(null);
   const filtersTitle = useId();
+  // Stars live in the small annotations table, so they're a live query; a
+  // star from the drawer or with s marks its row at once.
+  const stars = useLiveQuery(() => starredKeys(db), [db]) ?? NO_STARS;
+  const starred = starredFlags(rows, stars);
 
-  const view = buildView(rows, { ...query, text }, openKeys);
+  const view = buildView(rows, { ...query, text }, openKeys, starred);
   const chosen =
     query.sites.length +
     query.kinds.length +
     query.senders.length +
     query.sources.length +
-    query.dates.length;
+    query.dates.length +
+    (query.starred ? 1 : 0);
   const narrowed = chosen > 0 || text.trim() !== "";
   // A new search, filter or sort starts the list at the top.
   const listKey = JSON.stringify({ ...query, text });
@@ -152,10 +173,14 @@ export function LibraryView({
 
   // Typing replaces the history entry, so Back doesn't step through letters;
   // a filter, sort or duplicates change adds one, so Back undoes it. Next.js
-  // follows pushState and replaceState (it patches them).
+  // follows pushState and replaceState (it patches them). A view the address
+  // already says, as after a new default, adds nothing.
   useEffect(() => {
-    const search = searchFromQuery(query);
-    if (search === searchFromQuery(inAddress.current)) return;
+    const search = searchFromQuery(query, base);
+    if (search === new URLSearchParams(location.search).toString()) {
+      inAddress.current = query;
+      return;
+    }
     const url = `${location.pathname}${search ? `?${search}` : ""}${location.hash}`;
     if (onlyTextDiffers(inAddress.current, query)) {
       history.replaceState(null, "", url);
@@ -163,18 +188,18 @@ export function LibraryView({
       history.pushState(null, "", url);
     }
     inAddress.current = query;
-  }, [query]);
+  }, [query, base]);
 
   // Back and Forward: the view the address now holds.
   useEffect(() => {
     function onPopState() {
-      const next = queryFromSearch(location.search);
+      const next = queryFromSearch(location.search, base);
       inAddress.current = next;
       setQuery(next);
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [base]);
 
   // "/" goes to the search box (§7, Keyboard).
   useEffect(() => {
@@ -201,7 +226,9 @@ export function LibraryView({
       facets={view.facets}
       query={query}
       sourceNames={sourceNames}
+      hasStars={stars.length > 0}
       onChange={(group, values) => setQuery({ ...query, [group]: values })}
+      onStarredChange={(on) => setQuery({ ...query, starred: on })}
     />
   );
 
@@ -284,6 +311,7 @@ export function LibraryView({
               order={view.order}
               copies={view.copies}
               openKeys={openKeys}
+              starred={starred}
               onToggleCopies={(key) => {
                 const keys = new Set(openKeys);
                 if (!keys.delete(key)) keys.add(key);
@@ -353,7 +381,7 @@ export function LibraryView({
           notice={said}
           onReextract={
             flow
-              ? (source, choice) => flow.reextract(source, choice)
+              ? (source, choice) => flow.reextract([source], choice)
               : undefined
           }
           jobRunning={flow?.busy}
