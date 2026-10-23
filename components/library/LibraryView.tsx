@@ -9,9 +9,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { ExportDialog } from "@/components/export/ExportDialog";
 import { ImportFlowContext } from "@/components/import/ImportFlow";
 import type { LinkVaultDb } from "@/lib/db/schema";
 import type { Source } from "@/lib/db/types";
+import {
+  allRows,
+  exportOrder,
+  selectedRows,
+  urlsOf,
+  type ExportScope,
+} from "@/lib/export/scope";
 import type { Link } from "@/lib/extract/types";
 import { starredKeys, toggleStar } from "@/lib/library/details";
 import { starredFlags, textAt, type LibraryRows } from "@/lib/library/rows";
@@ -39,7 +47,7 @@ interface Props {
   rows: LibraryRows;
   sourceNames: ReadonlyMap<string, string>;
   sources: readonly Source[]; // for the Sources dialog
-  connect: () => ExtractClient; // the page's worker: deletes run there
+  connect: () => ExtractClient; // the page's worker: deletes and exports run there
   dedupeByDefault?: boolean; // Settings → "Collapse duplicates"
 }
 
@@ -96,6 +104,13 @@ export function LibraryView({
     keys: ReadonlySet<number>;
   }>({ rows, keys: new Set() });
   const openKeys = open.rows === rows ? open.keys : NO_KEYS;
+  // Selected links, by key, for these rows (§6.5); a new read starts empty.
+  const [selection, setSelection] = useState<{
+    rows: LibraryRows;
+    keys: ReadonlySet<number>;
+  }>({ rows, keys: new Set() });
+  const selected = selection.rows === rows ? selection.keys : NO_KEYS;
+  const [exporting, setExporting] = useState<ExportScope | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // Re-extract runs through the Importer's flow, with its progress and cancel.
@@ -157,6 +172,25 @@ export function LibraryView({
     navigator.clipboard.writeText(textAt(rows.urls, row)).then(
       () => say(strings.copied),
       () => say(strings.copyFailed),
+    );
+  }
+
+  function select(keys: number[], on: boolean) {
+    const next = new Set(selected);
+    for (const key of keys) {
+      if (on) next.add(key);
+      else next.delete(key);
+    }
+    setSelection({ rows, keys: next });
+  }
+
+  // Straight from the click: browsers allow the clipboard only in answer to
+  // one.
+  function copySelected() {
+    const { order } = exportOrder(rows, selectedRows(rows, selected), true);
+    navigator.clipboard.writeText(urlsOf(rows, order).join("\n")).then(
+      () => say(strings.exports.copied(order.length)),
+      () => say(strings.exports.copyFailed),
     );
   }
 
@@ -291,6 +325,13 @@ export function LibraryView({
         >
           {strings.sources.button}
         </button>
+        <button
+          type="button"
+          className={control}
+          onClick={() => setExporting(selected.size > 0 ? "selection" : "view")}
+        >
+          {strings.exports.button}
+        </button>
       </div>
       <p role="status" className="px-4 py-2 text-sm text-foreground/65">
         {strings.showing(view.matching, rows.count, view.unique)}
@@ -304,6 +345,34 @@ export function LibraryView({
           {facets}
         </aside>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {selected.size > 0 && (
+            <div
+              role="region"
+              aria-label={strings.selection.label}
+              className="flex flex-wrap items-center gap-2 border-b border-current/15 px-4 py-2 text-sm"
+            >
+              <span aria-live="polite" className="font-medium">
+                {strings.selection.selected(selected.size)}
+              </span>
+              <button type="button" className={control} onClick={copySelected}>
+                {strings.selection.copy}
+              </button>
+              <button
+                type="button"
+                className={control}
+                onClick={() => setExporting("selection")}
+              >
+                {strings.selection.export}
+              </button>
+              <button
+                type="button"
+                className={control}
+                onClick={() => setSelection({ rows, keys: new Set() })}
+              >
+                {strings.selection.clear}
+              </button>
+            </div>
+          )}
           {view.order.length > 0 ? (
             <LinkList
               key={listKey}
@@ -312,6 +381,9 @@ export function LibraryView({
               copies={view.copies}
               openKeys={openKeys}
               starred={starred}
+              selected={selected}
+              onSelect={select}
+              onClearSelection={() => setSelection({ rows, keys: new Set() })}
               onToggleCopies={(key) => {
                 const keys = new Set(openKeys);
                 if (!keys.delete(key)) keys.add(key);
@@ -385,6 +457,23 @@ export function LibraryView({
               : undefined
           }
           jobRunning={flow?.busy}
+        />
+      )}
+      {exporting && (
+        <ExportDialog
+          rows={rows}
+          lists={{
+            view: view.listed,
+            selection: selected.size > 0 ? selectedRows(rows, selected) : null,
+            library: allRows(rows),
+          }}
+          scope={exporting}
+          // A selection is of links, as its bar counts them; a view exports
+          // as it lists them.
+          once={exporting === "selection" || query.dedupe}
+          connect={connect}
+          onDone={say}
+          onClose={() => setExporting(null)}
         />
       )}
       {detailsRow === null && !sourcesOpen && said}

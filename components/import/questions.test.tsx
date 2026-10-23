@@ -36,6 +36,7 @@ function inProcessClient(db: LinkVaultDb) {
     load: vi.fn(),
     deleteSource: vi.fn(),
     reextract: vi.fn(),
+    exportLinks: vi.fn(),
     scan: async (input: ScanInput) => (await scanInput(db, input)).result,
     start: vi.fn<ExtractClient["start"]>(async () => ({
       sourceId: "new",

@@ -313,6 +313,46 @@ export const strings = {
       `Couldn't delete “${name}”, so nothing was removed. Try again.`,
   },
 
+  // Selecting links in the list (§6.5): x, or a row's checkbox.
+  selection: {
+    select: (title: string) => `Select ${title}`,
+    selected: (n: number) => `${count(n, "link")} selected`,
+    copy: "Copy URLs",
+    export: "Export",
+    clear: "Clear",
+    label: "Selected links",
+  },
+
+  // Exports (§6.5).
+  exports: {
+    button: "Export",
+    title: "Export links",
+    which: "Which links",
+    scopes: {
+      view: (n: number) => `This view (${count(n, "link")})`,
+      selection: (n: number) => `Selected (${count(n, "link")})`,
+      library: (n: number) => `Whole library (${count(n, "link")})`,
+    },
+    duplicates: "Links shared more than once",
+    once: "Once each",
+    everyTime: "Every time they were shared",
+    format: "Format",
+    formats: {
+      csv: "CSV, for spreadsheets, with the message and sender",
+      markdown: "Markdown, a list of links for notes",
+      text: "Plain text, one URL per line",
+    } satisfies Record<"csv" | "markdown" | "text", string>,
+    download: "Download",
+    copy: "Copy URLs",
+    cancel: "Cancel",
+    preparing: "Preparing the file…",
+    exported: (n: number) => `Exported ${count(n, "link")}.`,
+    copied: (n: number) => `Copied ${count(n, "URL")}.`,
+    nothing: "No links to export.",
+    copyFailed: "Couldn't copy: the browser didn't allow it.",
+    failed: "Couldn't export the links. Try again.",
+  },
+
   // Settings (§6.7).
   settings: {
     button: "Settings",

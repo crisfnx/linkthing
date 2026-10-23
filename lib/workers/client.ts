@@ -1,3 +1,4 @@
+import type { ExportFormat } from "@/lib/export/rows";
 import type { ImportProgress } from "@/lib/import/options";
 import type { ReextractChoice } from "@/lib/import/reextract";
 import type { Imported, ImportChoice } from "@/lib/import/save";
@@ -46,6 +47,12 @@ export interface ExtractClient {
   load(): Promise<LibraryRows>;
   // A source and its links, in one transaction (§6.4).
   deleteSource(sourceId: string): Promise<{ links: number }>;
+  // These links as a file (§6.5); links: how many it holds.
+  exportLinks(
+    ids: string[],
+    format: ExportFormat,
+    shared?: number[],
+  ): Promise<{ file: Blob; links: number }>;
   terminate(): void;
 }
 
@@ -123,6 +130,13 @@ export function createExtractClient(
     deleteSource: async (sourceId) => {
       const reply = await call({ type: "delete", sourceId }, "deleted");
       return { links: reply.links };
+    },
+    exportLinks: async (ids, format, shared) => {
+      const reply = await call(
+        { type: "export", ids, format, ...(shared ? { shared } : {}) },
+        "exported",
+      );
+      return { file: reply.file, links: reply.links };
     },
     terminate: () => worker.terminate(),
   };

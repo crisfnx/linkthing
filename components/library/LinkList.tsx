@@ -36,8 +36,11 @@ interface RowProps {
   copies?: number;
   open: boolean;
   starred: boolean;
+  selected: boolean;
+  selecting: boolean; // something is selected: every row shows its checkbox
   linkRef?: Ref<HTMLAnchorElement>;
   onActivate: (position: number) => void;
+  onSelect: (position: number, range: boolean) => void;
   onToggleCopies: (row: number) => void;
   onOpen: (row: number) => void; // the details drawer
 }
@@ -45,7 +48,9 @@ interface RowProps {
 // One link: a site badge (favicons arrive with M7), the title, or the URL
 // when there's none, then the kind, URL, sender and source, a star when
 // it's starred, and the date. A link shared more than once shows how often;
-// its copies sit indented under it when opened. Compiled as usual, so rows that stay on screen don't
+// its copies sit indented under it when opened. The badge gives way to a
+// checkbox when the row is pointed at or focused, and on every row once
+// something is selected. Compiled as usual, so rows that stay on screen don't
 // redraw on scroll.
 function LinkRow({
   rows,
@@ -59,8 +64,11 @@ function LinkRow({
   copies,
   open,
   starred,
+  selected,
+  selecting,
   linkRef,
   onActivate,
+  onSelect,
   onToggleCopies,
   onOpen,
 }: RowProps) {
@@ -80,15 +88,30 @@ function LinkRow({
       role="listitem"
       aria-posinset={position + 1}
       aria-setsize={count}
-      className={`absolute inset-x-0 top-0 flex items-center gap-2.5 pr-4 hover:bg-current/5 has-focus-visible:bg-current/10 ${copies === 0 ? "pl-12.5" : "pl-4"}`}
+      className={`group absolute inset-x-0 top-0 flex items-center gap-2.5 pr-4 hover:bg-current/5 has-focus-visible:bg-current/10 ${selected ? "bg-current/10" : ""} ${copies === 0 ? "pl-12.5" : "pl-4"}`}
       style={{ height: ROW_HEIGHT, transform: `translateY(${start}px)` }}
     >
-      <span
-        aria-hidden
-        className="grid size-6 shrink-0 place-items-center rounded text-xs font-semibold text-white"
-        style={{ backgroundColor: siteColor(domain) }}
-      >
-        {domain.charAt(0).toUpperCase()}
+      <span className="grid size-6 shrink-0 place-items-center">
+        <span
+          aria-hidden
+          className={`size-6 place-items-center rounded text-xs font-semibold text-white ${selecting ? "hidden" : "grid group-hover:hidden group-has-focus-visible:hidden"}`}
+          style={{ backgroundColor: siteColor(domain) }}
+        >
+          {domain.charAt(0).toUpperCase()}
+        </span>
+        <input
+          type="checkbox"
+          checked={selected}
+          tabIndex={active ? 0 : -1}
+          aria-label={strings.selection.select(title || shown)}
+          onFocus={() => onActivate(position)}
+          // The click behind it carries Shift, for a range (§6.5).
+          onChange={(event) =>
+            onSelect(position, (event.nativeEvent as MouseEvent).shiftKey)
+          }
+          // Above the stretched link, so it stays its own control.
+          className={`relative z-10 size-4 ${selecting ? "" : "hidden group-hover:block group-has-focus-visible:block"}`}
+        />
       </span>
       <div className="min-w-0 flex-1">
         <a
@@ -162,10 +185,13 @@ interface Props {
   copies: Uint32Array | null; // per shown row, with duplicates collapsed
   openKeys: ReadonlySet<number>; // keys whose copies are shown
   starred: Uint8Array | null; // per key (starredFlags)
+  selected: ReadonlySet<number>; // keys: a selection is of links, every copy
+  onSelect: (keys: number[], on: boolean) => void;
+  onClearSelection: () => void;
   onToggleCopies: (key: number) => void;
   sourceNames: ReadonlyMap<string, string>;
   // The focused row: Enter or a click opens it, o opens the link, c copies
-  // it, s stars it (§7).
+  // it, s stars it, x selects it, Shift+x selects from the last one (§7).
   onOpen: (row: number) => void;
   onOpenLink: (row: number) => void;
   onCopy: (row: number) => void;
@@ -181,6 +207,9 @@ export function LinkList({
   copies,
   openKeys,
   starred,
+  selected,
+  onSelect,
+  onClearSelection,
   onToggleCopies,
   sourceNames,
   onOpen,
@@ -204,6 +233,22 @@ export function LinkList({
   const current = Math.min(active, count - 1);
   // Set by a key press, so the row it moved to takes focus once drawn.
   const focusNext = useRef(false);
+  // Where the last selection was made: a range runs from here.
+  const anchor = useRef<number | null>(null);
+
+  // Selects or unselects the link at this position, or every link from the
+  // last one selected, all taking the state the clicked one takes.
+  function select(position: number, range: boolean) {
+    const keyAt = (p: number) => rows.keys[order[p]!]!;
+    const on = !selected.has(keyAt(position));
+    const from = range && anchor.current !== null ? anchor.current : position;
+    const keys: number[] = [];
+    for (let p = Math.min(from, position); p <= Math.max(from, position); p++) {
+      keys.push(keyAt(p));
+    }
+    anchor.current = position;
+    onSelect(keys, on);
+  }
 
   function move(to: number) {
     const next = Math.max(0, Math.min(count - 1, to));
@@ -231,6 +276,16 @@ export function LinkList({
       c: onCopy,
       s: onStar,
     };
+    if (event.key.toLowerCase() === "x" && count > 0) {
+      event.preventDefault();
+      select(current, event.shiftKey);
+      return;
+    }
+    if (event.key === "Escape" && selected.size > 0) {
+      event.preventDefault();
+      onClearSelection();
+      return;
+    }
     const action = actions[event.key];
     if (action && count > 0) {
       event.preventDefault();
@@ -279,6 +334,8 @@ export function LinkList({
               copies={copies?.[index]}
               open={openKeys.has(rows.keys[row]!)}
               starred={starred?.[rows.keys[row]!] === 1}
+              selected={selected.has(rows.keys[row]!)}
+              selecting={selected.size > 0}
               linkRef={
                 index === current
                   ? (link) => {
@@ -290,6 +347,7 @@ export function LinkList({
                   : undefined
               }
               onActivate={setActive}
+              onSelect={select}
               onToggleCopies={(r) => onToggleCopies(rows.keys[r]!)}
               onOpen={onOpen}
             />

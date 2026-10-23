@@ -64,6 +64,7 @@ export interface Facets {
 
 export interface View {
   order: Uint32Array; // rows to show, in order
+  listed: Uint32Array; // every matching row in that order, copies included
   // Per shown row: how many matching links share its key, when duplicates
   // are collapsed (1 when alone); 0 marks a copy shown under an expanded one.
   copies: Uint32Array | null;
@@ -398,6 +399,7 @@ export function buildView(
 
   return {
     order,
+    listed: list,
     copies,
     matching,
     unique,

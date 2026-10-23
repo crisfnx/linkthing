@@ -1,4 +1,6 @@
 import type { LinkVaultDb } from "@/lib/db/schema";
+import { formatExport } from "@/lib/export/formats";
+import { exportRows, FILE_TYPES } from "@/lib/export/rows";
 import { InputError } from "@/lib/extract/input";
 import type { ImportOptions } from "@/lib/import/options";
 import { reextractSource } from "@/lib/import/reextract";
@@ -117,6 +119,17 @@ export function createHandler({
           await upToDate();
           const { links } = await deleteSource(db, request.sourceId);
           return post({ id, type: "deleted", links });
+        } catch (error) {
+          return post(unexpected(id, error));
+        }
+      case "export":
+        try {
+          await upToDate();
+          const rows = await exportRows(db, request.ids, request.shared);
+          const file = new Blob([formatExport(rows, request.format)], {
+            type: FILE_TYPES[request.format].type,
+          });
+          return post({ id, type: "exported", file, links: rows.length });
         } catch (error) {
           return post(unexpected(id, error));
         }
