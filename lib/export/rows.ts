@@ -7,12 +7,13 @@ import { siteName } from "@/lib/extract/url/domain";
 import { starredKeys } from "@/lib/library/details";
 import { deriveTitle } from "@/lib/preview/derive-title";
 
-export type ExportFormat = "csv" | "markdown" | "text";
+export type ExportFormat = "csv" | "markdown" | "text" | "json";
 
 export const EXPORT_FORMATS: readonly ExportFormat[] = [
   "csv",
   "markdown",
   "text",
+  "json",
 ];
 
 export const FILE_TYPES: Record<
@@ -22,6 +23,7 @@ export const FILE_TYPES: Record<
   csv: { extension: "csv", type: "text/csv;charset=utf-8" },
   markdown: { extension: "md", type: "text/markdown;charset=utf-8" },
   text: { extension: "txt", type: "text/plain;charset=utf-8" },
+  json: { extension: "json", type: "application/json" },
 };
 
 export interface ExportRow {

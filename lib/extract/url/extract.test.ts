@@ -70,6 +70,19 @@ describe("bare domains", () => {
     const text = "try codesandbox.io or github.com/org/repo";
     expect(extractUrls(text, { bareDomains: false })).toEqual([]);
   });
+  // Settings → "Find bare domains" off (§4.1, §11): across the whole table,
+  // exactly the bare ones go, and every other URL is still found.
+  test.each(cases)(
+    "off, the table's bare ones go and only they: $input",
+    ({ input }) => {
+      const on = extractUrls(input);
+      const off = extractUrls(input, { bareDomains: false });
+      expect(off.map((found) => found.url)).toEqual(
+        on.filter((found) => !found.bare).map((found) => found.url),
+      );
+      expect(off.some((found) => found.bare)).toBe(false);
+    },
+  );
 });
 
 describe("countNonWebLinks", () => {

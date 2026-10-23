@@ -1,6 +1,7 @@
 // The export files (PRD §6.5): CSV for spreadsheets, a Markdown list for
-// notes, and plain text, one URL per line. The JSON backup is its own thing
-// (backup.ts); the Netscape bookmarks file follows in Phase 1.5.
+// notes, plain text, one URL per line, and JSON for other apps and scripts.
+// The backup is its own thing (lib/backup/), the one file a restore reads;
+// the Netscape bookmarks file follows in Phase 1.5.
 import { displayUrl } from "@/lib/preview/display-url";
 import { localDateTime, type ExportFormat, type ExportRow } from "./rows";
 
@@ -87,6 +88,32 @@ export function toText(urls: readonly string[]): string {
   return urls.length ? `${urls.join("\n")}\n` : "";
 }
 
+// --- JSON -----------------------------------------------------------------------
+
+// A list of links, one object a line: the CSV's columns with JSON's types
+// (dates as ISO 8601, starred a boolean), and fields a link lacks left out.
+export function toJson(rows: readonly ExportRow[]): string {
+  const objects = rows.map(({ link, title, site, source, starred, shared }) =>
+    JSON.stringify({
+      url: link.canonicalUrl,
+      title: title || undefined,
+      site,
+      kind: link.kind,
+      date:
+        link.timestamp === undefined
+          ? undefined
+          : new Date(link.timestamp).toISOString(),
+      sender: link.sender,
+      source,
+      starred,
+      message: link.context,
+      urlAsFound: link.url,
+      timesShared: shared,
+    }),
+  );
+  return objects.length ? `[\n${objects.join(",\n")}\n]\n` : "[]\n";
+}
+
 export function formatExport(
   rows: readonly ExportRow[],
   format: ExportFormat,
@@ -98,5 +125,7 @@ export function formatExport(
       return toMarkdown(rows);
     case "text":
       return toText(rows.map(({ link }) => link.canonicalUrl));
+    case "json":
+      return toJson(rows);
   }
 }

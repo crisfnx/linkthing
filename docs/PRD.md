@@ -6,8 +6,8 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 23 October 2026 (v2.31: M4 backup and restore; see Document history) |
-| **Status** | Planning / pre-development |
+| **Updated** | 23 October 2026 (v2.32: M4 complete; see Document history) |
+| **Status** | In development: M0–M4 built, M5 (polish and ship) next |
 
 ---
 
@@ -495,6 +495,7 @@ Querying strategy: Dexie is the durable store; browsing runs in memory. On load,
   - **Download.** The page sends the link ids in order to the worker, which reads the full links (the message and the URL as found aren't in the rows) and returns the file as a Blob, so a large file never passes through the page's thread. The browser saves it as `linkvault-view-2026-10-23.csv` (or `-selection-`, `-library-`), from a `blob:` address, which the CSP allows.
   - **CSV.** Columns: `url` (cleaned), `title`, `site`, `kind`, `date` (local, "2026-03-14 21:03"), `sender`, `source`, `starred`, `message`, `url_as_found`, plus `times_shared` when each link is exported once. Every cell is quoted, the formula characters escaped as above, records end in CRLF, and a byte-order mark makes Excel read the file as UTF-8.
   - **Markdown.** `- [title](url) — 2026-03-14`, with the display URL standing in for a missing title and no date for undated links.
+  - **JSON** (added in m4-finish, so every format covers the view, a selection and the library): a list of links, one object a line, with the CSV's columns as JSON types (ISO 8601 dates, `starred` a boolean, `timesShared` when each link is exported once) and missing fields left out. It's for other apps and scripts. A restore reads only the backup (below).
   - **Copy URLs.** It copies the chosen links' cleaned URLs straight from the rows, one per line, with nothing awaited before the clipboard call, since browsers allow it only in answer to a click.
   - **Selecting.** `x` selects the focused row's link, Shift+`x` every link from the last one selected, and `Esc` lets the selection go. A row's site badge gives way to a checkbox when the row is pointed at or focused, and on every row once something is selected; Shift-click selects a range. A selection is of links (by key), so every copy of a selected link is checked. It survives searches and filters, and a new read of the rows starts it empty. A bar above the list says "4 links selected", with Copy URLs, Export and Clear.
 - **Backup and restore**, as built in M4 (`lib/backup/`, `components/backup/Backup.tsx`).
@@ -923,11 +924,11 @@ Import
 - [x] Cancelling an import, or closing the tab during one, leaves no partial source.
 
 Extraction
-- [ ] All cases in `urls-edge-cases.txt` pass.
-- [ ] Original URL, canonical URL and `urlKey` stored; tracking params are stripped per their host rules, and the rest of the query keeps its original encoding; `urlKey` groups tracking-param, trailing-slash and mirror-host variants.
-- [ ] Domain grouping uses the registrable domain and the alias map.
-- [ ] Bare domains in the edge-case table are found and flagged `isBare`; the code, file-name and email look-alikes there are not; with the setting off, none are found.
-- [ ] A canonicalizer version bump re-keys stored links, and stars survive it, including stars on URLs whose source was deleted.
+- [x] All cases in `urls-edge-cases.txt` pass.
+- [x] Original URL, canonical URL and `urlKey` stored; tracking params are stripped per their host rules, and the rest of the query keeps its original encoding; `urlKey` groups tracking-param, trailing-slash and mirror-host variants.
+- [x] Domain grouping uses the registrable domain and the alias map.
+- [x] Bare domains in the edge-case table are found and flagged `isBare`; the code, file-name and email look-alikes there are not; with the setting off, none are found.
+- [x] A canonicalizer version bump re-keys stored links, and stars survive it, including stars on URLs whose source was deleted.
 
 Browse
 - [x] Virtualized list view; dedupe toggle with occurrence counts.
@@ -939,15 +940,15 @@ Browse
 - [x] View state is in the URL; reload restores it.
 
 Persist / export
-- [ ] Data survives reload; sources can be renamed, and deleted with their links.
-- [ ] Importing a non-chat file whose name matches a source offers **Replace**; stars survive it.
-- [ ] Export to JSON, CSV, Markdown and plain text for view / selection / library; CSV cells starting with `=`, `+`, `-` or `@` are escaped.
-- [ ] Backup JSON round-trips (export → delete everything → import → identical counts), and importing the same backup twice changes nothing.
+- [x] Data survives reload; sources can be renamed, and deleted with their links.
+- [x] Importing a non-chat file whose name matches a source offers **Replace**; stars survive it.
+- [x] Export to JSON, CSV, Markdown and plain text for view / selection / library; CSV cells starting with `=`, `+`, `-` or `@` are escaped.
+- [x] Backup JSON round-trips (export → delete everything → import → identical counts), and importing the same backup twice changes nothing.
 
 Quality
 - [ ] Keyboard-only operation of the main flows; screen reader announces progress and results.
 - [ ] Lighthouse ≥ 95 performance and accessibility on the empty state; dark mode has no unreadable contrast.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` all pass in CI.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` all pass in CI.
 
 ### Gate
 
@@ -1282,3 +1283,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 23 Oct 2026 | v2.29: M4 re-key (`lib/library/rekey.ts`). The worker brings stored links and per-URL rows up to the canonicalizer's version before its first library request, in one transaction; a library without a `meta` row counts as version 1. A merge keeps a star if either row had one. Unreadable URLs keep their key, and source counts follow merges. Timings at 98 k links are in §4.4 and §8.6; the settings table is typed by its two row names (§4.4, §8.2, §8.4, §8.6) |
 | 23 Oct 2026 | v2.30: M4 exports (`ExportDialog`, `lib/export/`): CSV, Markdown and plain text of the view, the selected links or the library, once each or every time shared, written in the worker and saved as a file; Copy URLs; selection with `x`, Shift+`x`, a checkbox on hover and Shift-click, and a bar with Copy URLs, Export and Clear (§6.5, §7, §8.2, §8.4, §8.6, §14). The JSON backup and its restore follow in m4-backup |
 | 23 Oct 2026 | v2.31: M4 backup and restore (`lib/backup/`, `components/backup/Backup.tsx`, zod 4.6.5). Gzipped JSON Lines (the owner chose a compressed file), written in the worker in one read transaction; restore checks every line against schemas tied to the stored types, plus counts and sources, before one transaction adds what's missing, by source id or content. Stars merge, settings return only to a browser without any, and keys from another canonicalizer version are re-keyed. Restore is offered on the first screen; a backup given to Import is refused; a backup is suggested after imports of 1,000 links or more. Round trip measured at 98 k links (§6.5, §8.1, §8.2, §8.4, §8.6, §9, §14, §15) |
+| 23 Oct 2026 | v2.32: M4 complete. JSON joins the export formats (§6.5). The MVP's Extraction and Persist / export criteria are ticked: the edge-case table with bare domains off is now tested case by case, and CI passes on every M4 merge, so the CI criterion is ticked too. The keyboard, screen-reader and Lighthouse criteria wait for M5's audit (§11). Status updated; README updated |

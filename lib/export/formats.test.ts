@@ -6,6 +6,7 @@ import {
   markdownText,
   markdownUrl,
   toCsv,
+  toJson,
   toMarkdown,
   toText,
 } from "./formats";
@@ -131,4 +132,40 @@ test("dates in the browser's time zone; none for undated links", () => {
     "2026-01-05 07:09",
   );
   expect(localDateTime(undefined)).toBe("");
+});
+
+test("JSON: one object a line, the CSV's columns with JSON's types", () => {
+  const json = toJson([
+    row(
+      "https://x.com/exampledev/status/1?s=20",
+      { title: "Post by @exampledev", site: "x.com", starred: true, shared: 2 },
+      { timestamp: at, sender: "Ana", context: "look" },
+    ),
+    row("https://example.com/page"),
+  ]);
+  expect(json.split("\n")).toHaveLength(5); // [, two links, ], final newline
+  expect(JSON.parse(json)).toEqual([
+    {
+      url: "https://x.com/exampledev/status/1",
+      title: "Post by @exampledev",
+      site: "x.com",
+      kind: "social",
+      date: new Date(at).toISOString(),
+      sender: "Ana",
+      source: "Chat with Me",
+      starred: true,
+      message: "look",
+      urlAsFound: "https://x.com/exampledev/status/1?s=20",
+      timesShared: 2,
+    },
+    {
+      url: "https://example.com/page",
+      site: "example.com",
+      kind: "other",
+      source: "Chat with Me",
+      starred: false,
+      urlAsFound: "https://example.com/page",
+    },
+  ]);
+  expect(toJson([])).toBe("[]\n");
 });
