@@ -1,3 +1,5 @@
+import type { BackupCounts } from "@/lib/backup/format";
+import type { Restored } from "@/lib/backup/restore";
 import type { ExportFormat } from "@/lib/export/rows";
 import type { ImportProgress } from "@/lib/import/options";
 import type { ReextractChoice } from "@/lib/import/reextract";
@@ -47,6 +49,11 @@ export interface ExtractClient {
   load(): Promise<LibraryRows>;
   // A source and its links, in one transaction (§6.4).
   deleteSource(sourceId: string): Promise<{ links: number }>;
+  // The whole library as one file (§6.5).
+  backup(): Promise<{ file: Blob; counts: BackupCounts }>;
+  // A backup merged into the library. Rejects with "invalid-backup", its
+  // message saying why, or "cancelled" on cancel.
+  restore(file: Blob, onProgress?: OnProgress): Promise<Restored>;
   // These links as a file (§6.5); links: how many it holds.
   exportLinks(
     ids: string[],
@@ -130,6 +137,18 @@ export function createExtractClient(
     deleteSource: async (sourceId) => {
       const reply = await call({ type: "delete", sourceId }, "deleted");
       return { links: reply.links };
+    },
+    backup: async () => {
+      const reply = await call({ type: "backup" }, "backedUp");
+      return { file: reply.file, counts: reply.counts };
+    },
+    restore: async (file, onProgress) => {
+      const reply = await call(
+        { type: "restore", file },
+        "restored",
+        onProgress,
+      );
+      return reply.restored;
     },
     exportLinks: async (ids, format, shared) => {
       const reply = await call(

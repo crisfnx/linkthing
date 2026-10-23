@@ -12,7 +12,8 @@ export interface PreparedInput {
 
 export class InputError extends Error {
   constructor(
-    readonly code: "zip-without-chat" | "unreadable-zip" | "too-large",
+    readonly code:
+      "zip-without-chat" | "unreadable-zip" | "too-large" | "is-backup", // a LinkVault backup: restored, not imported (§6.5)
   ) {
     super(code);
     this.name = "InputError";

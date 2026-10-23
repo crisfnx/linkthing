@@ -77,6 +77,7 @@ export default function Workspace() {
               settings={settings}
               sources={sources}
               rows={library.status === "ready" ? library.rows : null}
+              connect={connect}
             />
           }
         >

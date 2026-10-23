@@ -2,6 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { use, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { DownloadBackup, RestoreBackup } from "@/components/backup/Backup";
 import { ImportFlowContext } from "@/components/import/ImportFlow";
 import type { LinkVaultDb } from "@/lib/db/schema";
 import type { Source } from "@/lib/db/types";
@@ -15,12 +16,14 @@ import {
   type StorageUse,
 } from "@/lib/storage";
 import { strings } from "@/lib/strings";
+import type { ExtractClient } from "@/lib/workers/client";
 
 interface Props {
   db: LinkVaultDb;
   settings: UserSettings;
   sources: readonly Source[];
   rows: LibraryRows | null; // to count bare links; null until read
+  connect: () => ExtractClient; // backups are written and restored there
   onClose: () => void;
 }
 
@@ -52,6 +55,7 @@ export function SettingsDialog({
   settings,
   sources,
   rows,
+  connect,
   onClose,
 }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -311,6 +315,12 @@ export function SettingsDialog({
               )}
             </div>
           )}
+          <h4 className="mt-2 font-medium">{strings.backup.heading}</h4>
+          <p className="text-sm">{strings.backup.note}</p>
+          <div className="flex flex-wrap items-start gap-2">
+            <DownloadBackup connect={connect} busy={busy} />
+            <RestoreBackup connect={connect} busy={busy} />
+          </div>
         </Section>
 
         <Section title={strings.settings.deleteEverything}>

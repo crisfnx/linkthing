@@ -1,5 +1,7 @@
 // Messages between the UI and the extraction worker (PRD §8.2).
 import type { InputError } from "@/lib/extract/input";
+import type { BackupCounts } from "@/lib/backup/format";
+import type { Restored } from "@/lib/backup/restore";
 import type { ExportFormat } from "@/lib/export/rows";
 import type { ImportProgress } from "@/lib/import/options";
 import type { ReextractChoice } from "@/lib/import/reextract";
@@ -10,9 +12,10 @@ import type { LibraryRows } from "@/lib/library/rows";
 // One import at a time: start imports the last scan, reextract reads a
 // stored source again (§6.4), and cancel stops whichever is running. Cancel gets no reply of its own; the
 // request it stops replies with the code "cancelled". Load reads the library
-// as rows (§5), delete removes a source with its links (§6.4) and export
-// writes links to a file (§6.5); they can run beside an import, and a cancel
-// touches none of them.
+// as rows (§5), delete removes a source with its links (§6.4), export writes
+// links to a file and backup the library (§6.5); they can run beside an
+// import, and a cancel touches none of them. Restore runs as an import does,
+// one job at a time, and Cancel stops it.
 export type WorkerRequest =
   | { id: number; type: "ping" }
   | { id: number; type: "scan"; input: ScanInput }
@@ -32,12 +35,18 @@ export type WorkerRequest =
       ids: string[]; // in the order the file lists them
       shared?: number[]; // per id, when each link is exported once
       format: ExportFormat;
-    };
+    }
+  | { id: number; type: "backup" }
+  | { id: number; type: "restore"; file: Blob };
 
 // "unexpected" covers anything without its own message in the UI yet, such
 // as a database error.
 export type WorkerErrorCode =
-  InputError["code"] | "cancelled" | "quota-exceeded" | "unexpected";
+  | InputError["code"]
+  | "invalid-backup" // the message says why (lib/backup/restore.ts)
+  | "cancelled"
+  | "quota-exceeded"
+  | "unexpected";
 
 export type WorkerResponse =
   | { id: number; type: "pong" }
@@ -47,4 +56,6 @@ export type WorkerResponse =
   | { id: number; type: "rows"; rows: LibraryRows }
   | { id: number; type: "deleted"; links: number }
   | { id: number; type: "exported"; file: Blob; links: number }
+  | { id: number; type: "backedUp"; file: Blob; counts: BackupCounts }
+  | { id: number; type: "restored"; restored: Restored }
   | { id: number; type: "error"; code: WorkerErrorCode; message: string };

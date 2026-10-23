@@ -80,6 +80,8 @@ function fakeClient(results: Imported[] = [imported()]) {
     deleteSource: vi.fn(),
     reextract: vi.fn<ExtractClient["reextract"]>(),
     exportLinks: vi.fn<ExtractClient["exportLinks"]>(),
+    backup: vi.fn<ExtractClient["backup"]>(),
+    restore: vi.fn<ExtractClient["restore"]>(),
   } satisfies ExtractClient;
   return client;
 }
@@ -711,5 +713,52 @@ describe("re-extracting a source (§6.4)", () => {
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Something went wrong re-extracting “Me”, and it was left as it was.",
     );
+  });
+});
+
+describe("backups (§6.5, §15)", () => {
+  const drop = (name: string) =>
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [fileNamed(name)], getData: () => "" },
+    });
+
+  test("an import adding 1,000 links or more suggests one", async () => {
+    const client = fakeClient(); // 4,644 new links
+    renderImporter(client);
+    drop("WhatsApp Chat with Me.txt");
+    await screen.findByText("4,644 links found");
+    expect(
+      screen.getByText(/^Your library lives only in this browser/),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Download a backup" }),
+    ).toBeTruthy();
+  });
+
+  test("a small one doesn't", async () => {
+    const client = fakeClient([
+      imported({ newLinks: 12, stats: { ...imported().stats, links: 12 } }),
+    ]);
+    renderImporter(client);
+    drop("notes.txt");
+    await screen.findByText("12 links found");
+    expect(
+      screen.queryByRole("button", { name: "Download a backup" }),
+    ).toBeNull();
+  });
+
+  test("the first screen restores one, and imports wait for it", async () => {
+    const client = fakeClient();
+    client.restore.mockImplementation(() => new Promise(() => {}));
+    render(<Importer connect={() => client} empty />);
+    fireEvent.change(document.querySelector("input[type=file][accept*=gz]")!, {
+      target: { files: [new File(["…"], "linkvault-backup.jsonl.gz")] },
+    });
+    expect(await screen.findByText("Checking the backup…")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "Choose files" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
   });
 });

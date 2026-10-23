@@ -11,6 +11,7 @@ import { sha256 } from "@/lib/extract/keys";
 import { linkCounts, linkIdsFor, type LinkCount } from "@/lib/extract/pipeline";
 import type { DateOrder, SourceKind } from "@/lib/extract/types";
 import type { ExtractOptions } from "@/lib/extract/url/extract";
+import { looksLikeBackup } from "@/lib/backup/format";
 import { inputSize, MAX_INPUT_BYTES } from "./limits";
 import { checkpoint, type ImportOptions } from "./options";
 
@@ -85,6 +86,12 @@ async function readInput(
   input: ScanInput,
 ): Promise<{ text: string } | { bytes: Uint8Array; name: string }> {
   if (inputSize(input) > MAX_INPUT_BYTES) throw new InputError("too-large");
+  // Read as text, a backup would become a source of every link it holds.
+  const backup =
+    "text" in input
+      ? input.text.startsWith('{"linkvault":"backup"')
+      : await looksLikeBackup(input.file);
+  if (backup) throw new InputError("is-backup");
   if ("text" in input) return { text: input.text };
   const bytes = new Uint8Array(await input.file.arrayBuffer());
   return { bytes, name: input.file.name };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { DownloadBackup, RestoreBackup } from "@/components/backup/Backup";
 import { useImport, type Decide, type ImportState } from "@/hooks/useImport";
 import type { DateOrder } from "@/lib/extract/types";
 import type { ImportChoice } from "@/lib/import/save";
@@ -29,6 +30,10 @@ interface Props {
 }
 
 const button = "rounded-md border border-current px-3 py-1.5 font-medium";
+
+// An import adding this many links is worth a backup (§15): the library
+// lives only in this browser.
+const BACKUP_NUDGE = 1000;
 
 // Failures that may not happen twice. A zip without a chat, or a damaged
 // one, fails the same way again: its message says what to do instead.
@@ -75,7 +80,13 @@ export function Importer({
   const { state, importFiles, importText, reextract, cancel, retry, dismiss } =
     useImport({ connect, decide });
   const running = state.status === "running";
+  // A restore from the first screen: imports wait for it, and it for them.
+  const [restoring, setRestoring] = useState(false);
   const results = "results" in state ? state.results : [];
+  const added = results.reduce(
+    (sum, result) => sum + (result.how === "reextracted" ? 0 : result.newLinks),
+    0,
+  );
   const [panelOpen, setPanelOpen] = useState(false);
 
   // Cancel goes with the progress bar, the sample button once the library
@@ -146,6 +157,12 @@ export function Importer({
         </div>
       )}
       {results.length > 0 && <ImportSummary results={results} />}
+      {!running && added >= BACKUP_NUDGE && (
+        <div className="flex flex-col items-start gap-2">
+          <p>{strings.backup.nudge}</p>
+          <DownloadBackup connect={connect} />
+        </div>
+      )}
     </>
   );
 
@@ -206,7 +223,11 @@ export function Importer({
   }
 
   return (
-    <DropZone disabled={running} onFiles={importFiles} onText={importText}>
+    <DropZone
+      disabled={running || restoring}
+      onFiles={importFiles}
+      onText={importText}
+    >
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
         <header className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold">{strings.appName}</h1>
@@ -216,11 +237,18 @@ export function Importer({
 
         <ImportForm
           ref={returnFocus}
-          busy={running}
+          busy={running || restoring}
           sample={empty}
           onFiles={importFiles}
           onText={importText}
         />
+        {empty && (
+          <RestoreBackup
+            connect={connect}
+            busy={running}
+            onRunning={setRestoring}
+          />
+        )}
 
         {announced}
         {outcome}
