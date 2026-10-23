@@ -90,3 +90,32 @@ test("x selects a link, and Copy URLs copies it", async ({ page, context }) => {
   await page.keyboard.press("Escape");
   await expect(bar).toBeHidden();
 });
+
+// The page's static HTML is the first screen's intro, painted before any
+// script (PRD §8.6). A browser that holds a library hides it from the first
+// paint, so a reload goes straight to the library.
+test("a reload of a library doesn't flash the first screen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // A first visit: the intro is in the HTML, before the workspace loads.
+  await expect(page.locator("[data-shell] h1")).toHaveText("LinkVault");
+  await sample(page);
+
+  await page.addInitScript(() => {
+    new MutationObserver((_, observer) => {
+      const shell = document.querySelector("[data-shell]");
+      if (!shell) return;
+      (window as unknown as { shellSeen: string }).shellSeen =
+        getComputedStyle(shell).visibility;
+      observer.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.reload();
+  await expect(shown(page)).toHaveText("56 links, 51 unique");
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { shellSeen?: string }).shellSeen,
+    ),
+  ).toBe("hidden");
+});

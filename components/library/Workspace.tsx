@@ -3,11 +3,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useRef, useState } from "react";
 import { Importer } from "@/components/import/Importer";
+import { FirstScreenShell } from "@/components/import/Intro";
 import { SettingsButton } from "@/components/settings/SettingsDialog";
 import { useExtractClient } from "@/hooks/useExtractClient";
 import { useLibrary } from "@/hooks/useLibrary";
 import { createDb } from "@/lib/db/schema";
 import { readSettings } from "@/lib/settings";
+import { rememberLibrary } from "@/lib/shell";
 import { askToPersist } from "@/lib/storage";
 import { strings } from "@/lib/strings";
 import { applyTheme } from "@/lib/theme";
@@ -45,7 +47,10 @@ export default function Workspace() {
   const wasEmpty = useRef(empty);
   useEffect(() => {
     if (wasEmpty.current === true && empty === false) void askToPersist();
-    if (empty !== undefined) wasEmpty.current = empty;
+    if (empty !== undefined) {
+      wasEmpty.current = empty;
+      rememberLibrary(!empty);
+    }
   }, [empty]);
 
   return (
@@ -64,6 +69,11 @@ export default function Workspace() {
             {strings.reload}
           </button>
         </div>
+      )}
+      {/* Until it's known which screen applies, the static HTML's intro
+          stays (WorkspaceLoader). */}
+      {(sources === undefined || settings === undefined) && (
+        <FirstScreenShell />
       )}
       {sources !== undefined && settings !== undefined && (
         <Importer

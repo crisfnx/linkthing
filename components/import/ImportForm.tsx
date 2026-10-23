@@ -100,7 +100,7 @@ export function ImportForm({ busy, sample, onFiles, onText, ref }: Props) {
           name="text"
           rows={6}
           readOnly={busy}
-          className="rounded-md border border-current/40 bg-transparent p-2 font-mono text-sm"
+          className="rounded-md border border-current/60 bg-transparent p-2 font-mono text-sm"
         />
         <div className="flex flex-wrap gap-2">
           <button type="submit" className={button} aria-disabled={busy}>

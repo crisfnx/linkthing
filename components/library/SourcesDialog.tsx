@@ -230,7 +230,7 @@ export function SourcesDialog({
                       aria-invalid={mine.error !== undefined}
                       aria-describedby={mine.error ? errorId : undefined}
                       maxLength={MAX_SOURCE_NAME + 50}
-                      className="min-w-48 flex-1 rounded-md border border-current/40 bg-transparent px-2 py-1"
+                      className="min-w-48 flex-1 rounded-md border border-current/60 bg-transparent px-2 py-1"
                     />
                     <button type="submit" className={button}>
                       {strings.sources.save}

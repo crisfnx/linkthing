@@ -500,6 +500,10 @@ describe("once the library has links", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByRole("region", { name: "Imported" })).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("");
+    // It went with the focus on it: focus goes to Import, not nowhere.
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Import" }),
+    );
   });
 
   test("Import is off during an import, and focus comes back to it after", async () => {

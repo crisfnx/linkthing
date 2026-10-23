@@ -51,8 +51,10 @@ interface Props {
   dedupeByDefault?: boolean; // Settings → "Collapse duplicates"
 }
 
+// A field's border is all that shows where it is, so it keeps 3:1 against
+// the page (WCAG 1.4.11): 60 % of the text colour, 4.7:1 in light.
 const control =
-  "rounded-md border border-current/40 bg-transparent px-2 py-1.5";
+  "rounded-md border border-current/60 bg-transparent px-2 py-1.5";
 // The toolbar's buttons, smaller on phones so the list keeps the screen.
 // Text fields and the sort menu stay at 16 px: iOS zooms into anything
 // smaller when it's focused.
@@ -359,12 +361,6 @@ export function LibraryView({
       </p>
 
       <div className="flex min-h-0 flex-1 border-t border-current/15">
-        <aside
-          aria-label={strings.filters}
-          className="hidden w-64 shrink-0 overflow-y-auto border-r border-current/15 p-4 md:block"
-        >
-          {facets}
-        </aside>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {(picking || selected.size > 0) && (
             <div
@@ -453,6 +449,14 @@ export function LibraryView({
             </div>
           )}
         </div>
+        {/* After the list in the page, so Tab reaches the links before
+            every filter; shown first, on the left. */}
+        <aside
+          aria-label={strings.filters}
+          className="hidden w-64 shrink-0 overflow-y-auto border-r border-current/15 p-4 md:order-first md:block"
+        >
+          {facets}
+        </aside>
       </div>
 
       {detailsRow !== null && (

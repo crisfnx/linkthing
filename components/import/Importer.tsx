@@ -13,6 +13,7 @@ import { DropZone } from "./DropZone";
 import { ImportFlowContext } from "./ImportFlow";
 import { ImportDialog } from "./ImportDialog";
 import { ImportForm } from "./ImportForm";
+import { FIRST_SCREEN, Intro } from "./Intro";
 import { ImportPanel } from "./ImportPanel";
 import { ImportProgress } from "./ImportProgress";
 import { ImportSummary } from "./ImportSummary";
@@ -208,7 +209,16 @@ export function Importer({
                 {outcome}
                 {finished && (
                   <div>
-                    <button type="button" className={button} onClick={dismiss}>
+                    <button
+                      type="button"
+                      className={button}
+                      onClick={() => {
+                        // It goes with what it dismisses: focus goes to
+                        // Import rather than nowhere.
+                        dismiss();
+                        returnFocus.current?.focus();
+                      }}
+                    >
                       {strings.dismiss}
                     </button>
                   </div>
@@ -228,12 +238,8 @@ export function Importer({
       onFiles={importFiles}
       onText={importText}
     >
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold">{strings.appName}</h1>
-          <p className="text-lg">{strings.tagline}</p>
-          <p className="text-sm opacity-70">{strings.privacy}</p>
-        </header>
+      <main className={FIRST_SCREEN}>
+        <Intro />
 
         <ImportForm
           ref={returnFocus}
