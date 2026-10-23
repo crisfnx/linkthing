@@ -247,6 +247,7 @@ export function Importer({
             connect={connect}
             busy={running}
             onRunning={setRestoring}
+            buttonClass={`${button} self-start aria-disabled:opacity-50`}
           />
         )}
 

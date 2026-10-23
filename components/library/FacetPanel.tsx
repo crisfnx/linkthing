@@ -68,7 +68,7 @@ function Section({
         {chosen && (
           <button
             type="button"
-            className="underline underline-offset-2"
+            className="min-h-6 underline underline-offset-2"
             onClick={onClear}
           >
             {strings.clear}
@@ -140,7 +140,7 @@ export function FacetPanel({
         {facets.sites.length > TOP_SITES && (
           <button
             type="button"
-            className="self-start underline underline-offset-2"
+            className="min-h-6 self-start underline underline-offset-2"
             onClick={() => setAllSites(!allSites)}
           >
             {allSites
@@ -204,7 +204,7 @@ export function FacetPanel({
                     aria-expanded={open}
                     aria-controls={id}
                     aria-label={strings.showMonths(year.value)}
-                    className="px-1"
+                    className="grid min-h-6 min-w-6 place-items-center"
                     onClick={() => {
                       const next = new Set(openYears);
                       if (open) next.delete(year.value);

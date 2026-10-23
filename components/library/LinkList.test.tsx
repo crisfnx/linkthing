@@ -340,7 +340,13 @@ describe("selecting links (§6.5)", () => {
     ["One", "Two", "Three", "Four"][Array.from(rows.keys).indexOf(key)];
 
   // The list with its selection held as LibraryView holds it.
-  function Selecting() {
+  function Selecting({
+    picking = false,
+    onOpen = () => {},
+  }: {
+    picking?: boolean;
+    onOpen?: (row: number) => void;
+  }) {
     const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
     return (
       <>
@@ -355,6 +361,8 @@ describe("selecting links (§6.5)", () => {
           openKeys={new Set()}
           starred={null}
           selected={selected}
+          picking={picking}
+          onOpen={onOpen}
           onSelect={(keys, on) => {
             const next = new Set(selected);
             for (const key of keys) {
@@ -396,6 +404,16 @@ describe("selecting links (§6.5)", () => {
     fireEvent.click(box(3), { shiftKey: true });
     expect(selectedNow()).toBe("Four,One,Three,Two");
     expect((box(2) as HTMLInputElement).checked).toBe(true);
+  });
+
+  test("with Select on, a click selects and Shift-click a range; nothing opens", () => {
+    const onOpen = vi.fn();
+    render(<Selecting picking onOpen={onOpen} />);
+    fireEvent.click(linkAt(1));
+    fireEvent.click(linkAt(3), { shiftKey: true });
+    expect(selectedNow()).toBe("Four,Three,Two");
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(linkAt(0).hasAttribute("aria-haspopup")).toBe(false);
   });
 
   test("Esc lets the whole selection go", () => {

@@ -53,6 +53,10 @@ interface Props {
 
 const control =
   "rounded-md border border-current/40 bg-transparent px-2 py-1.5";
+// The toolbar's buttons, smaller on phones so the list keeps the screen.
+// Text fields and the sort menu stay at 16 px: iOS zooms into anything
+// smaller when it's focused.
+const tool = `${control} max-sm:py-1 max-sm:text-sm`;
 
 // One empty set, not a new one per render: the view is worked out again
 // only when its inputs change, and a fresh set would count as a change, so
@@ -111,6 +115,9 @@ export function LibraryView({
   }>({ rows, keys: new Set() });
   const selected = selection.rows === rows ? selection.keys : NO_KEYS;
   const [exporting, setExporting] = useState<ExportScope | null>(null);
+  // Select is on: every row shows its checkbox and a tap selects (§6.5),
+  // the way on a phone, with no x key and no pointer to hover.
+  const [picking, setPicking] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // Re-extract runs through the Importer's flow, with its progress and cancel.
@@ -175,6 +182,11 @@ export function LibraryView({
     );
   }
 
+  function clearSelection() {
+    setSelection({ rows, keys: new Set() });
+    setPicking(false);
+  }
+
   function select(keys: number[], on: boolean) {
     const next = new Set(selected);
     for (const key of keys) {
@@ -187,6 +199,7 @@ export function LibraryView({
   // Straight from the click: browsers allow the clipboard only in answer to
   // one.
   function copySelected() {
+    if (selected.size === 0) return;
     const { order } = exportOrder(rows, selectedRows(rows, selected), true);
     navigator.clipboard.writeText(urlsOf(rows, order).join("\n")).then(
       () => say(strings.exports.copied(order.length)),
@@ -301,7 +314,7 @@ export function LibraryView({
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 max-sm:text-sm">
           <input
             type="checkbox"
             checked={query.dedupe}
@@ -313,21 +326,29 @@ export function LibraryView({
         </label>
         <button
           type="button"
-          className={`${control} md:hidden`}
+          className={`${tool} md:hidden`}
           onClick={() => setFiltersOpen(true)}
         >
           {chosen > 0 ? strings.filtersOn(chosen) : strings.filters}
         </button>
         <button
           type="button"
-          className={control}
+          className={tool}
+          aria-pressed={picking}
+          onClick={() => (picking ? clearSelection() : setPicking(true))}
+        >
+          {strings.selection.start}
+        </button>
+        <button
+          type="button"
+          className={tool}
           onClick={() => setSourcesOpen(true)}
         >
           {strings.sources.button}
         </button>
         <button
           type="button"
-          className={control}
+          className={tool}
           onClick={() => setExporting(selected.size > 0 ? "selection" : "view")}
         >
           {strings.exports.button}
@@ -345,31 +366,39 @@ export function LibraryView({
           {facets}
         </aside>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {selected.size > 0 && (
+          {(picking || selected.size > 0) && (
             <div
               role="region"
               aria-label={strings.selection.label}
               className="flex flex-wrap items-center gap-2 border-b border-current/15 px-4 py-2 text-sm"
             >
               <span aria-live="polite" className="font-medium">
-                {strings.selection.selected(selected.size)}
+                {selected.size > 0
+                  ? strings.selection.selected(selected.size)
+                  : strings.selection.prompt}
               </span>
-              <button type="button" className={control} onClick={copySelected}>
+              <button
+                type="button"
+                className={`${control} aria-disabled:opacity-50`}
+                aria-disabled={selected.size === 0}
+                onClick={copySelected}
+              >
                 {strings.selection.copy}
               </button>
               <button
                 type="button"
-                className={control}
-                onClick={() => setExporting("selection")}
+                className={`${control} aria-disabled:opacity-50`}
+                aria-disabled={selected.size === 0}
+                onClick={() => selected.size > 0 && setExporting("selection")}
               >
                 {strings.selection.export}
               </button>
               <button
                 type="button"
                 className={control}
-                onClick={() => setSelection({ rows, keys: new Set() })}
+                onClick={clearSelection}
               >
-                {strings.selection.clear}
+                {picking ? strings.selection.done : strings.selection.clear}
               </button>
             </div>
           )}
@@ -382,8 +411,9 @@ export function LibraryView({
               openKeys={openKeys}
               starred={starred}
               selected={selected}
+              picking={picking}
               onSelect={select}
-              onClearSelection={() => setSelection({ rows, keys: new Set() })}
+              onClearSelection={clearSelection}
               onToggleCopies={(key) => {
                 const keys = new Set(openKeys);
                 if (!keys.delete(key)) keys.add(key);

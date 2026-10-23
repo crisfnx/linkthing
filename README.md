@@ -58,16 +58,16 @@ Chats and notes make good "save for later" bins and bad libraries. The links are
 - **Stars.** Star a link from the list or its details; every copy of it is starred, a ★ marks its rows, and a **Starred** filter shows just those.
 - **Settings.** Theme (system, light or dark, applied before the page draws), the day/month order the import suggests, finding bare domains like `example.com/page` (turning it off re-reads only the sources that have them), duplicates collapsed by default, how much storage LinkVault uses, asking the browser to keep it, and **Delete everything**.
 - **Export.** The current view, the links you've selected, or the whole library, each link once or every time it was shared, as CSV (with the message and sender; spreadsheet formulas defused), a Markdown list, plain URLs or JSON. Or copy the URLs.
-- **Select.** `x` on a row, Shift+`x` or Shift-click for a range; a bar then offers Copy URLs, Export and Clear.
+- **Select.** `x` on a row, Shift+`x` or Shift-click for a range, or the **Select** button, which works by touch: every row gets a checkbox and a tap picks it. A bar then offers Copy URLs, Export and Clear.
 - **Backups.** One compressed file with your sources, their original text, links, stars and settings. Restoring checks the whole file first, adds only what's missing and never deletes, so restoring twice changes nothing. It works from the first screen too, for a browser that has cleared its storage, and a backup is suggested after big imports.
 - **Stars survive rule changes.** When an update changes how links are cleaned, stored links are re-keyed and stars follow them.
 - **Still fast at 100,000 links:** a backup in under a second, a restore in about five, a full CSV export in under two, with the page responsive throughout.
 
 ### Coming next: polish and ship (M5)
 
-- Empty states, a mobile layout and a dark-mode pass
+- A phone layout (done: compact toolbar, 24 px tap targets, selecting by touch), empty states and a dark-mode pass
 - An accessibility audit and Lighthouse checks
-- End-to-end tests, then a deploy to Vercel
+- End-to-end browser tests in CI
 
 ### Later, after real-world use
 
@@ -100,8 +100,8 @@ Extraction is pure TypeScript with no DOM or React (enforced by lint). It runs i
 | M2 · Import | The first screen: drop a file, see progress and a summary | ✅ Done |
 | M3 · Browse | The library: search, filters, details | ✅ Done |
 | M4 · Persist & export | Manage sources, stars, settings, exports, backups | ✅ Done |
-| M5 · Polish & ship | Mobile, dark mode, accessibility; deployed | Next |
-| Gate | Two weeks of real use before deciding what comes next | |
+| M5 · Polish & ship | Mobile, dark mode, accessibility, browser tests | In progress |
+| Gate | Two weeks of real use, run locally, before deciding what comes next | |
 | Phase 1.5 · Breadth | More sources and views | |
 | M6 · Tags | Tags and smarter search | |
 | M7 · Previews | Opt-in link previews | |
