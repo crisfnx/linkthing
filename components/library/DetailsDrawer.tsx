@@ -66,7 +66,7 @@ export function DetailsDrawer({
     async () => (link ? db.annotations.get(link.urlKey) : undefined),
     [db, link?.urlKey],
   );
-  const starred = annotation?.starred === true;
+  const starred = annotation?.starred === 1;
 
   // Once, even when React runs effects twice in development.
   useEffect(() => {

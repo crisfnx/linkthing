@@ -181,6 +181,23 @@ describe("dates that fit both orders", () => {
     });
   });
 
+  test("Settings' default order wins over the language", () => {
+    vi.stubGlobal("navigator", { language: "en-US" });
+    const onDecide = vi.fn();
+    render(
+      <ImportDialog
+        scan={{ ...chat, ...ambiguous }}
+        defaultDateOrder="DMY"
+        onDecide={onDecide}
+      />,
+    );
+    click("Import");
+    expect(onDecide).toHaveBeenCalledWith({
+      kind: "whatsapp",
+      dateOrder: "DMY",
+    });
+  });
+
   test("focus starts on the checked option, the one Enter would give", () => {
     ask(ambiguous, "en-US");
     const monthFirst = screen.getByLabelText(

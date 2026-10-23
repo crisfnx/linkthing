@@ -38,7 +38,7 @@ export function ImportProgress({
     <section className="flex flex-col gap-3" aria-label={strings.progressLabel}>
       <p className="font-medium">
         {job === "reextract"
-          ? strings.reextracting(label)
+          ? strings.reextracting(label, remaining)
           : strings.importing(label, remaining)}
       </p>
       {size > LARGE_INPUT_BYTES && size <= MAX_INPUT_BYTES && (

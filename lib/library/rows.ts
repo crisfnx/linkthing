@@ -38,6 +38,7 @@ export interface LibraryRows {
   sourceIds: string[];
   keys: Uint32Array; // duplicates share a key: the same urlKey (§4.4)
   keyCount: number; // distinct links
+  urlKeys: PackedText; // per key, not per row: the urlKey behind it (stars)
 }
 
 export const SHORTENED = 1;
@@ -65,7 +66,46 @@ export function transferablesOf(rows: LibraryRows): ArrayBuffer[] {
     rows.senders,
     rows.sources,
     rows.keys,
+    rows.urlKeys.offsets,
   ].map((column) => column.buffer as ArrayBuffer);
+}
+
+// Which keys are starred, from the starred urlKeys (§5, Annotation): a flag
+// per key, or null when nothing is. The urlKey → key map is built once per
+// rows, on the first star, so a star added later costs a lookup.
+const keyIndexes = new WeakMap<LibraryRows, Map<string, number>>();
+
+export function starredFlags(
+  rows: LibraryRows,
+  starred: readonly string[],
+): Uint8Array | null {
+  if (starred.length === 0) return null;
+  let index = keyIndexes.get(rows);
+  if (!index) {
+    index = new Map();
+    for (let key = 0; key < rows.keyCount; key++) {
+      index.set(textAt(rows.urlKeys, key), key);
+    }
+    keyIndexes.set(rows, index);
+  }
+  const flags = new Uint8Array(rows.keyCount);
+  for (const urlKey of starred) {
+    const key = index.get(urlKey);
+    if (key !== undefined) flags[key] = 1;
+  }
+  return flags;
+}
+
+// Links found without https:// (§4.1), per source id: what turning off
+// Settings → "Find bare domains" would remove.
+export function bareLinksBySource(rows: LibraryRows): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (let r = 0; r < rows.count; r++) {
+    if (!(rows.flags[r]! & BARE)) continue;
+    const id = rows.sourceIds[rows.sources[r]!]!;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 // Search text and queries alike: lowercase, accents off ("belem" finds
@@ -221,6 +261,10 @@ export class RowsBuilder {
       sourceIds: this.sourceTable.names,
       keys: take(this.keys, new Uint32Array(count)),
       keyCount: this.keyTable.names.length,
+      urlKeys: pack(
+        this.keyTable.names,
+        new Uint32Array(this.keyTable.names.length).map((_, i) => i),
+      ),
     };
   }
 }

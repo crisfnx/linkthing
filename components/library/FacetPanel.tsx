@@ -13,7 +13,9 @@ interface Props {
   facets: Facets;
   query: Query;
   sourceNames: ReadonlyMap<string, string>;
+  hasStars: boolean; // anything in the library is starred
   onChange: (group: Group, values: string[]) => void;
+  onStarredChange: (on: boolean) => void;
 }
 
 function toggled(values: readonly string[], value: string): string[] {
@@ -28,7 +30,7 @@ function Option({
   count,
   selected,
   onToggle,
-}: FacetValue & { label: string; onToggle: () => void }) {
+}: FacetValue & { label: ReactNode; onToggle: () => void }) {
   return (
     <label className="flex items-center gap-2 py-0.5" data-value={value}>
       <input type="checkbox" checked={selected} onChange={onToggle} />
@@ -78,11 +80,18 @@ function Section({
   );
 }
 
-// The filters beside the list (§6.3): sites (the busiest twenty, then all),
-// kinds, senders, sources and dates by year and month, each value with how
-// many links choosing it would give. Any value within a group, every group
-// across them.
-export function FacetPanel({ facets, query, sourceNames, onChange }: Props) {
+// The filters beside the list (§6.3): starred links once there are any,
+// sites (the busiest twenty, then all), kinds, senders, sources and dates by
+// year and month, each value with how many links choosing it would give.
+// Any value within a group, every group across them.
+export function FacetPanel({
+  facets,
+  query,
+  sourceNames,
+  hasStars,
+  onChange,
+  onStarredChange,
+}: Props) {
   const [allSites, setAllSites] = useState(false);
   const [openYears, setOpenYears] = useState<ReadonlySet<string>>(new Set());
   const monthsId = useId();
@@ -107,6 +116,21 @@ export function FacetPanel({ facets, query, sourceNames, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-6 text-sm">
+      {(hasStars || query.starred) && (
+        <Option
+          value="starred"
+          label={
+            <>
+              <span aria-hidden>★ </span>
+              {strings.starredOnly}
+            </>
+          }
+          count={facets.starred}
+          selected={query.starred}
+          onToggle={() => onStarredChange(!query.starred)}
+        />
+      )}
+
       <Section
         title={strings.filterGroups.sites}
         chosen={query.sites.length > 0}

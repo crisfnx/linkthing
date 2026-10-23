@@ -605,7 +605,7 @@ describe("re-extracting a source (§6.4)", () => {
         type="button"
         aria-disabled={flow?.busy}
         onClick={() =>
-          flow?.reextract({ id: "chat", name: "Me" }, { dateOrder: "MDY" })
+          flow?.reextract([{ id: "chat", name: "Me" }], { dateOrder: "MDY" })
         }
       >
         Read it again
@@ -647,6 +647,55 @@ describe("re-extracting a source (§6.4)", () => {
     );
     expect(screen.getByText("Read again: 4,644 links found")).toBeTruthy();
     expect(client.scan).not.toHaveBeenCalled();
+  });
+
+  test("several sources, one after another, as a Settings change needs", async () => {
+    const client = fakeClient();
+    const finishes: ((value: Imported) => void)[] = [];
+    client.reextract.mockImplementation(
+      () => new Promise<Imported>((resolve) => finishes.push(resolve)),
+    );
+    function ReadBoth() {
+      const flow = use(ImportFlowContext);
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            flow?.reextract(
+              [
+                { id: "chat", name: "Me" },
+                { id: "notes", name: "Notes" },
+              ],
+              {},
+            )
+          }
+        >
+          Read both again
+        </button>
+      );
+    }
+    render(
+      <Importer connect={() => client} library>
+        <ReadBoth />
+      </Importer>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Read both again" }));
+    expect(
+      await screen.findByText("Re-extracting “Me” (1 more source after this)"),
+    ).toBeTruthy();
+
+    await act(async () =>
+      finishes[0]!(imported({ name: "Me", how: "reextracted" })),
+    );
+    expect(await screen.findByText("Re-extracting “Notes”")).toBeTruthy();
+    await act(async () =>
+      finishes[1]!(imported({ name: "Notes", how: "reextracted" })),
+    );
+    expect(client.reextract.mock.calls.map(([id]) => id)).toEqual([
+      "chat",
+      "notes",
+    ]);
+    expect(screen.getAllByText(/^Read again:/)).toHaveLength(2);
   });
 
   test("a failure says the source was left as it was", async () => {

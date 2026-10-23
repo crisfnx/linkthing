@@ -1,12 +1,16 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Importer } from "@/components/import/Importer";
+import { SettingsButton } from "@/components/settings/SettingsDialog";
 import { useExtractClient } from "@/hooks/useExtractClient";
 import { useLibrary } from "@/hooks/useLibrary";
 import { createDb } from "@/lib/db/schema";
+import { readSettings } from "@/lib/settings";
+import { askToPersist } from "@/lib/storage";
 import { strings } from "@/lib/strings";
+import { applyTheme } from "@/lib/theme";
 import { LibraryView } from "./LibraryView";
 
 // Everything that needs the browser: IndexedDB and the worker (§8.2). Loaded
@@ -22,10 +26,27 @@ export default function Workspace() {
   // Small, so a live query. Undefined until read: neither screen shows
   // before it's known which one applies.
   const sources = useLiveQuery(() => db.sources.toArray(), [db]);
+  const settings = useLiveQuery(() => readSettings(db), [db]);
   const connect = useExtractClient();
   const library = useLibrary(db, connect);
   const sourceNames = new Map(sources?.map((s) => [s.id, s.name]));
   const hasSources = sources !== undefined && sources.length > 0;
+
+  // The layout's script applied the theme before the first paint, from its
+  // copy in localStorage; the settings are the record (§6.7).
+  const theme = settings?.theme;
+  useEffect(() => {
+    if (theme) applyTheme(theme);
+  }, [theme]);
+
+  // After the first import, ask the browser to keep the data (§15). Not on
+  // every load: Firefox asks the user each time.
+  const empty = sources === undefined ? undefined : sources.length === 0;
+  const wasEmpty = useRef(empty);
+  useEffect(() => {
+    if (wasEmpty.current === true && empty === false) void askToPersist();
+    if (empty !== undefined) wasEmpty.current = empty;
+  }, [empty]);
 
   return (
     <>
@@ -44,11 +65,20 @@ export default function Workspace() {
           </button>
         </div>
       )}
-      {sources !== undefined && (
+      {sources !== undefined && settings !== undefined && (
         <Importer
           connect={connect}
           empty={sources.length === 0}
           library={hasSources}
+          defaultDateOrder={settings.defaultDateOrder}
+          actions={
+            <SettingsButton
+              db={db}
+              settings={settings}
+              sources={sources}
+              rows={library.status === "ready" ? library.rows : null}
+            />
+          }
         >
           {hasSources && (
             <div className="flex min-h-0 flex-1 flex-col">
@@ -70,6 +100,7 @@ export default function Workspace() {
                     sourceNames={sourceNames}
                     sources={sources}
                     connect={connect}
+                    dedupeByDefault={settings.dedupeByDefault}
                   />
                 ))}
             </div>

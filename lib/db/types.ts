@@ -36,7 +36,9 @@ export interface SourcePart {
 export interface Annotation {
   urlKey: string;
   url: string;
-  starred?: boolean;
+  // 1, not true: IndexedDB can't index booleans, so a star is 1 and no star
+  // leaves the field out (schema v2).
+  starred?: 1;
   tags?: string[]; // Tag ids
   status?: "unread" | "read" | "archived"; // Phase 3
   note?: string; // Phase 3
@@ -105,6 +107,12 @@ export interface Settings {
     rememberKey: boolean;
   };
 }
+
+// The settings row holds only what the user changed; the rest are defaults,
+// filled in when read (lib/settings.ts), so a new setting needs no migration.
+export type StoredSettings = { key: "settings" } & Partial<
+  Omit<Settings, "key">
+>;
 
 export interface Meta {
   key: "meta";

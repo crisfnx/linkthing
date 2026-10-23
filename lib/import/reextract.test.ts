@@ -69,7 +69,7 @@ describe("read again as it was", () => {
     });
     expect(await linksOf(db, sourceId)).toEqual(before);
     expect(await db.annotations.get(before[0]!.urlKey)).toMatchObject({
-      starred: true,
+      starred: 1,
     });
     const after = (await db.sources.get(sourceId))!;
     expect(after.updatedAt).toBeGreaterThanOrEqual(source.updatedAt);

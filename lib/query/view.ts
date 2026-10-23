@@ -26,6 +26,7 @@ export interface Query {
   senders: readonly string[]; // "" is "no sender"
   sources: readonly string[]; // source ids
   dates: readonly string[]; // "2026", "2026-03", or "" for undated
+  starred: boolean; // starred links only
   sort: Sort;
   dedupe: boolean;
 }
@@ -37,6 +38,7 @@ export const EMPTY_QUERY: Query = {
   senders: [],
   sources: [],
   dates: [],
+  starred: false,
   sort: "newest",
   dedupe: false,
 };
@@ -57,6 +59,7 @@ export interface Facets {
   senders: FacetValue[]; // most links first; "" last
   sources: FacetValue[]; // latest import first
   dates: DateFacet[]; // newest year first; "" (undated) last
+  starred: number; // starred links among the matches, as the others count
 }
 
 export interface View {
@@ -211,6 +214,7 @@ const KIND = 2;
 const SENDER = 4;
 const SOURCE = 8;
 const DATE = 16;
+const STARRED = 32;
 
 // A selection as a flag per table index, or null when nothing is chosen.
 function chosen(
@@ -240,6 +244,7 @@ export function buildView(
   rows: LibraryRows,
   query: Query,
   expanded: ReadonlySet<number> = new Set(), // keys shown with all copies
+  starred: Uint8Array | null = null, // per key (starredFlags); null: none
 ): View {
   const hits = searchCached(rows, query.text);
   const derived = derive(rows);
@@ -267,6 +272,7 @@ export function buildView(
   const senderCount = new Uint32Array(rows.senderNames.length);
   const sourceCount = new Uint32Array(rows.sourceIds.length);
   const monthCount = new Uint32Array(months.length);
+  let starredCount = 0;
   const matched = new Uint32Array(rows.count);
   let matching = 0;
 
@@ -280,12 +286,14 @@ export function buildView(
     const sender = rows.senders[r]!;
     const source = rows.sources[r]!;
     const m = month[r]!;
+    const star = starred?.[rows.keys[r]!] === 1;
     const failed =
       (sites && !sites[site] ? SITE : 0) |
       (kinds && !kinds[kind] ? KIND : 0) |
       (senders && !senders[sender] ? SENDER : 0) |
       (sources && !sources[source] ? SOURCE : 0) |
-      (dates && !dates[m] ? DATE : 0);
+      (dates && !dates[m] ? DATE : 0) |
+      (query.starred && !star ? STARRED : 0);
     if (failed === 0) {
       matched[matching++] = r;
       siteCount[site]!++;
@@ -293,12 +301,14 @@ export function buildView(
       senderCount[sender]!++;
       sourceCount[source]!++;
       monthCount[m]!++;
+      if (star) starredCount++;
     } else if ((failed & (failed - 1)) === 0) {
       if (failed === SITE) siteCount[site]!++;
       else if (failed === KIND) kindCount[kind]!++;
       else if (failed === SENDER) senderCount[sender]!++;
       else if (failed === SOURCE) sourceCount[source]!++;
-      else monthCount[m]!++;
+      else if (failed === DATE) monthCount[m]!++;
+      // Failing only "starred" means not starred: nothing to count.
     }
   }
   const list = sorted(
@@ -400,6 +410,7 @@ export function buildView(
       ],
       sources: facet(rows.sourceIds, sourceCount, sources),
       dates: visibleDates,
+      starred: starredCount,
     },
   };
 }

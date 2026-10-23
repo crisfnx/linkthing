@@ -6,6 +6,7 @@ import { saveImport } from "@/lib/import/save";
 import { scanInput, type Scan } from "@/lib/import/scan";
 import { loadRows, transferablesOf } from "@/lib/library/rows";
 import { deleteSource } from "@/lib/library/sources";
+import { readSettings } from "@/lib/settings";
 import type {
   WorkerErrorCode,
   WorkerRequest,
@@ -53,8 +54,12 @@ export function createHandler({ db, post }: WorkerContext) {
     const controller = new AbortController();
     running = controller;
     try {
+      // Read for each request, so a change in Settings, from this tab or
+      // another, applies to the next import.
+      const { findBareDomains } = await readSettings(db);
       post(
         await task({
+          bareDomains: findBareDomains,
           onProgress: (progress) => post({ id, type: "progress", progress }),
           signal: controller.signal,
         }),

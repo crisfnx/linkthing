@@ -60,7 +60,7 @@ const link: Link = {
 const annotation: Annotation = {
   urlKey: link.urlKey,
   url: link.url,
-  starred: true,
+  starred: 1,
   tags: ["tag-1"],
   updatedAt: now,
 };
@@ -125,7 +125,7 @@ afterEach(async () => {
   }
 });
 
-describe("schema v1", () => {
+describe("the schema", () => {
   test("opens with every table from the data model", async () => {
     const db = freshDb();
     await db.open();
@@ -180,6 +180,33 @@ describe("schema v1", () => {
   });
 });
 
+describe("schema v2", () => {
+  test("stars stored as true become 1 and reach the starred index; false goes", async () => {
+    const name = `test-${crypto.randomUUID()}`;
+    const v1 = new Dexie(name);
+    v1.version(1).stores({ annotations: "urlKey, starred, *tags" });
+    await v1.table("annotations").bulkPut([
+      { urlKey: "a", url: "https://a.example", starred: true, updatedAt: 1 },
+      {
+        urlKey: "b",
+        url: "https://b.example",
+        starred: false,
+        tags: ["tag-1"],
+        updatedAt: 1,
+      },
+    ]);
+    v1.close();
+
+    const db = createDb(name);
+    opened.push(db);
+    expect(await db.annotations.get("a")).toMatchObject({ starred: 1 });
+    expect(await db.annotations.get("b")).not.toHaveProperty("starred");
+    expect(
+      await db.annotations.where("starred").equals(1).primaryKeys(),
+    ).toEqual(["a"]);
+  });
+});
+
 describe("an upgrade from another tab", () => {
   test("closes this connection and asks for a reload", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -188,7 +215,7 @@ describe("an upgrade from another tab", () => {
     await db.open();
 
     const newerTab = new Dexie(db.name);
-    newerTab.version(2).stores({ sources: "id, importedAt, updatedAt" });
+    newerTab.version(3).stores({ sources: "id, importedAt, updatedAt" });
     await newerTab.open();
     newerTab.close();
 

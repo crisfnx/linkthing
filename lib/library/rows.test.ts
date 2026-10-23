@@ -10,11 +10,13 @@ import { scanInput } from "@/lib/import/scan";
 import { syntheticExport } from "@/tests/synthetic";
 import {
   BARE,
+  bareLinksBySource,
   foldForSearch,
   kindAt,
   loadRows,
   RowsBuilder,
   SHORTENED,
+  starredFlags,
   textAt,
   transferablesOf,
   type LibraryRows,
@@ -173,6 +175,19 @@ describe("what each row carries", () => {
     ]);
   });
 
+  test("links found without https://, counted per source", () => {
+    const rows = build([
+      link("https://example.com/a", { isBare: true }),
+      link("https://example.com/b", { isBare: true, sourceId: "notes" }),
+      link("https://example.com/c"),
+      link("https://example.com/d", { isBare: true }),
+    ]);
+    expect(Object.fromEntries(bareLinksBySource(rows))).toEqual({
+      chat: 2,
+      notes: 1,
+    });
+  });
+
   test("X's links, as x.com or twitter.com, are one site shown as x.com", () => {
     const rows = build([
       link("https://twitter.com/exampledev/status/1", { timestamp: 2 }),
@@ -194,6 +209,23 @@ describe("what each row carries", () => {
     expect(rows.keys[0]).toBe(rows.keys[2]);
     expect(rows.keys[1]).not.toBe(rows.keys[0]);
     expect(rows.keyCount).toBe(2);
+  });
+
+  test("each key's urlKey, so stars find their rows", () => {
+    const shared = [
+      link("https://youtu.be/Ex4mpLeV1d0?si=Zx9", { timestamp: 3 }),
+      link("https://example.com/a", { timestamp: 2 }),
+      link("https://www.youtube.com/watch?v=Ex4mpLeV1d0", { timestamp: 1 }),
+    ];
+    const rows = build(shared);
+    expect(textAt(rows.urlKeys, rows.keys[0]!)).toBe(shared[0]!.urlKey);
+    expect(textAt(rows.urlKeys, rows.keys[1]!)).toBe(shared[1]!.urlKey);
+
+    const flags = starredFlags(rows, [shared[2]!.urlKey, "not-in-the-rows"]);
+    expect(flags?.[rows.keys[0]!]).toBe(1);
+    expect(flags?.[rows.keys[2]!]).toBe(1); // the same video
+    expect(flags?.[rows.keys[1]!]).toBe(0);
+    expect(starredFlags(rows, [])).toBeNull();
   });
 });
 
@@ -246,7 +278,7 @@ describe("search text", () => {
 test("the number columns go to the page by transfer, not copy", () => {
   const rows = build([link("https://example.com/a")]);
   const transfer = transferablesOf(rows);
-  expect(new Set(transfer).size).toBe(11);
+  expect(new Set(transfer).size).toBe(12);
 
   const received = structuredClone(rows, { transfer });
   expect(rows.timestamps.length).toBe(0); // moved: detached here

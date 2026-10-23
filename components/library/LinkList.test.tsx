@@ -2,7 +2,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Link } from "@/lib/extract/types";
 import { describeUrl } from "@/lib/extract/url/describe";
-import { RowsBuilder, type LibraryRows } from "@/lib/library/rows";
+import {
+  RowsBuilder,
+  starredFlags,
+  type LibraryRows,
+} from "@/lib/library/rows";
 import { buildView, EMPTY_QUERY } from "@/lib/query/view";
 import { LinkList } from "./LinkList";
 
@@ -68,13 +72,20 @@ const noActions = {
 
 // Every row, in order, nothing collapsed: the list as the view gives it with
 // no search or filters.
-function List({ rows }: { rows: LibraryRows }) {
+function List({
+  rows,
+  starred = null,
+}: {
+  rows: LibraryRows;
+  starred?: Uint8Array | null;
+}) {
   return (
     <LinkList
       rows={rows}
       order={Uint32Array.from({ length: rows.count }, (_, i) => i)}
       copies={null}
       openKeys={new Set()}
+      starred={starred}
       onToggleCopies={() => {}}
       sourceNames={names}
       {...noActions}
@@ -109,6 +120,19 @@ test("a row: its title links to the page, then the URL, kind and date", () => {
     new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(at),
   );
   expect(time.getAttribute("dateTime")).toBe(new Date(at).toISOString());
+});
+
+test("a starred link shows a star, and every copy of it does", () => {
+  const video = link("https://youtu.be/Ex4mpLeV1d0", { timestamp: 3 });
+  const rows = rowsOf([
+    video,
+    link("https://example.com/a-page", { timestamp: 2 }),
+    link("https://www.youtube.com/watch?v=Ex4mpLeV1d0", { timestamp: 1 }),
+  ]);
+  render(<List rows={rows} starred={starredFlags(rows, [video.urlKey])} />);
+  expect(items().map((item) => item.textContent?.includes("★Starred"))).toEqual(
+    [true, false, true],
+  );
 });
 
 test("with no readable title, the URL is the title and the site follows", () => {
@@ -212,6 +236,7 @@ test("a link shared more than once says how often, and opens to its copies", () 
       order={closed.order}
       copies={closed.copies}
       openKeys={new Set()}
+      starred={null}
     />,
   );
   expect(items()).toHaveLength(2);
@@ -234,6 +259,7 @@ test("a link shared more than once says how often, and opens to its copies", () 
       order={opened.order}
       copies={opened.copies}
       openKeys={new Set([key])}
+      starred={null}
     />,
   );
   expect(items()).toHaveLength(3);
@@ -254,6 +280,7 @@ test("a plain click opens the details; with a modifier it stays a link", () => {
       order={Uint32Array.from([0, 1, 2])}
       copies={null}
       openKeys={new Set()}
+      starred={null}
       onToggleCopies={() => {}}
       sourceNames={names}
       {...noActions}
@@ -280,6 +307,7 @@ test("o, c and s act on the focused row", () => {
       order={Uint32Array.from([2, 1, 0])} // shown oldest first
       copies={null}
       openKeys={new Set()}
+      starred={null}
       onToggleCopies={() => {}}
       sourceNames={names}
       {...noActions}
