@@ -279,6 +279,48 @@ test("with nothing starred there's no Starred filter", async () => {
   expect(screen.queryByRole("checkbox", { name: /^Starred/ })).toBeNull();
 });
 
+test("selected links: a bar to copy or export them, and to clear", async () => {
+  const writeText = vi.fn(async () => {});
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  renderView();
+  expect(screen.queryByRole("region", { name: "Selected links" })).toBeNull();
+  const first = screen.getAllByRole("listitem")[0]!;
+  const link = within(first).getByRole("link");
+  link.focus();
+  fireEvent.keyDown(link, { key: "x" });
+
+  const bar = screen.getByRole("region", { name: "Selected links" });
+  // The video, shared twice: one link, both rows checked.
+  expect(bar.textContent).toContain("1 link selected");
+  expect(
+    screen
+      .getAllByRole("checkbox", { name: /^Select / })
+      .filter((box) => (box as HTMLInputElement).checked),
+  ).toHaveLength(2);
+
+  await act(async () =>
+    fireEvent.click(within(bar).getByRole("button", { name: "Copy URLs" })),
+  );
+  expect(writeText).toHaveBeenCalledWith(
+    "https://www.youtube.com/watch?v=Ex4mpLeV1d0",
+  );
+  expect(await screen.findByText("Copied 1 URL.")).toBeTruthy();
+
+  fireEvent.click(within(bar).getByRole("button", { name: "Export" }));
+  const dialog = screen.getByRole("dialog", { name: "Export links" });
+  expect(
+    (
+      within(dialog).getByRole("radio", {
+        name: "Selected (1 link)",
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+  fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
+  expect(screen.queryByRole("region", { name: "Selected links" })).toBeNull();
+});
+
 test("nothing matches: say so, and offer to clear", () => {
   const { search } = renderView();
   fireEvent.change(search, { target: { value: "nowhere-at-all" } });

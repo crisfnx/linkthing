@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Link } from "@/lib/extract/types";
 import { describeUrl } from "@/lib/extract/url/describe";
 import {
@@ -68,6 +69,9 @@ const noActions = {
   onOpenLink: () => {},
   onCopy: () => {},
   onStar: () => {},
+  selected: new Set<number>(),
+  onSelect: () => {},
+  onClearSelection: () => {},
 };
 
 // Every row, in order, nothing collapsed: the list as the view gives it with
@@ -323,4 +327,82 @@ test("o, c and s act on the focused row", () => {
   expect(actions.onOpenLink).toHaveBeenCalledWith(1);
   expect(actions.onCopy).toHaveBeenCalledWith(1);
   expect(actions.onStar).toHaveBeenCalledWith(1);
+});
+
+describe("selecting links (§6.5)", () => {
+  const rows = rowsOf([
+    link("https://example.com/one", { timestamp: 4 }),
+    link("https://example.com/two", { timestamp: 3 }),
+    link("https://example.com/three", { timestamp: 2 }),
+    link("https://example.com/four", { timestamp: 1 }),
+  ]);
+  const titleOf = (key: number) =>
+    ["One", "Two", "Three", "Four"][Array.from(rows.keys).indexOf(key)];
+
+  // The list with its selection held as LibraryView holds it.
+  function Selecting() {
+    const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+    return (
+      <>
+        <p data-testid="selected">
+          {[...selected].map(titleOf).sort().join(",")}
+        </p>
+        <LinkList
+          {...noActions}
+          rows={rows}
+          order={Uint32Array.from([0, 1, 2, 3])}
+          copies={null}
+          openKeys={new Set()}
+          starred={null}
+          selected={selected}
+          onSelect={(keys, on) => {
+            const next = new Set(selected);
+            for (const key of keys) {
+              if (on) next.add(key);
+              else next.delete(key);
+            }
+            setSelected(next);
+          }}
+          onClearSelection={() => setSelected(new Set())}
+          onToggleCopies={() => {}}
+          sourceNames={names}
+        />
+      </>
+    );
+  }
+
+  const selectedNow = () => screen.getByTestId("selected").textContent;
+  const linkAt = (i: number) => within(items()[i]!).getByRole("link");
+
+  test("x selects the focused link, x again lets it go; Shift+x selects a range", () => {
+    render(<Selecting />);
+    linkAt(0).focus();
+    fireEvent.keyDown(linkAt(0), { key: "x" });
+    expect(selectedNow()).toBe("One");
+    fireEvent.keyDown(linkAt(0), { key: "j" });
+    fireEvent.keyDown(linkAt(1), { key: "j" });
+    fireEvent.keyDown(linkAt(2), { key: "X", shiftKey: true });
+    expect(selectedNow()).toBe("One,Three,Two");
+    fireEvent.keyDown(linkAt(2), { key: "x" });
+    expect(selectedNow()).toBe("One,Two");
+  });
+
+  test("a row's checkbox, and Shift-click for every row since the last one", () => {
+    render(<Selecting />);
+    const box = (i: number) =>
+      within(items()[i]!).getByRole("checkbox", { hidden: true });
+    expect(box(1).getAttribute("aria-label")).toBe("Select Two");
+    fireEvent.click(box(0));
+    fireEvent.click(box(3), { shiftKey: true });
+    expect(selectedNow()).toBe("Four,One,Three,Two");
+    expect((box(2) as HTMLInputElement).checked).toBe(true);
+  });
+
+  test("Esc lets the whole selection go", () => {
+    render(<Selecting />);
+    linkAt(0).focus();
+    fireEvent.keyDown(linkAt(0), { key: "x" });
+    fireEvent.keyDown(linkAt(0), { key: "Escape" });
+    expect(selectedNow()).toBe("");
+  });
 });

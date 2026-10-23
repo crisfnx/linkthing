@@ -79,6 +79,7 @@ function fakeClient(results: Imported[] = [imported()]) {
     load: vi.fn(),
     deleteSource: vi.fn(),
     reextract: vi.fn<ExtractClient["reextract"]>(),
+    exportLinks: vi.fn<ExtractClient["exportLinks"]>(),
   } satisfies ExtractClient;
   return client;
 }

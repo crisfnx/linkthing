@@ -241,3 +241,37 @@ test("the first load brings stored keys up to the canonicalizer's version", asyn
     canonicalizerVersion: CANONICALIZER_VERSION,
   });
 });
+
+test("export writes the links asked for, in that order, as a file", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  await client.scan({
+    text: "https://example.com/a\nhttps://example.com/b?utm_source=x",
+  });
+  await client.start({});
+  const rows = await client.load();
+  const ids = Array.from({ length: rows.count }, (_, i) => textAt(rows.ids, i));
+  const second = (await db.links.get(ids[1]!))!;
+  await db.annotations.put({
+    urlKey: second.urlKey,
+    url: second.url,
+    starred: 1,
+    updatedAt: 1,
+  });
+
+  const text = await client.exportLinks([ids[1]!, ids[0]!], "text");
+  expect(text.links).toBe(2);
+  expect(text.file.type).toBe("text/plain;charset=utf-8");
+  expect(await text.file.text()).toBe(
+    `${textAt(rows.urls, 1)}\n${textAt(rows.urls, 0)}\n`,
+  );
+
+  // A link gone since (its source deleted) is left out.
+  const csv = await client.exportLinks([ids[1]!, "gone"], "csv", [2, 1]);
+  const lines = (await csv.file.text()).split("\r\n");
+  expect(csv.links).toBe(1);
+  expect(lines).toHaveLength(3); // header, one link, the final line break
+  expect(lines[1]).toContain('"yes"'); // starred
+  expect(lines[1]).toContain('"https://example.com/b?utm_source=x"');
+  expect(lines[1]?.endsWith('"2"')).toBe(true); // times shared
+});
