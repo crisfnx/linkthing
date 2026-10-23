@@ -12,6 +12,8 @@ import { loadSample } from "@/lib/import/sample";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import { WorkerError, type ExtractClient } from "@/lib/workers/client";
+import { use } from "react";
+import { ImportFlowContext } from "./ImportFlow";
 import { Importer } from "./Importer";
 
 // Fetching the sample has its own test in lib/import; here it's a file.
@@ -34,7 +36,7 @@ function imported(overrides: Partial<Imported> = {}): Imported {
   return {
     sourceId: crypto.randomUUID(),
     name: "Chat with Me",
-    updated: false,
+    how: "new",
     newLinks: 4644,
     stats: {
       messages: 5210,
@@ -76,6 +78,7 @@ function fakeClient(results: Imported[] = [imported()]) {
     terminate: vi.fn(),
     load: vi.fn(),
     deleteSource: vi.fn(),
+    reextract: vi.fn<ExtractClient["reextract"]>(),
   } satisfies ExtractClient;
   return client;
 }
@@ -546,7 +549,7 @@ describe("the summary", () => {
   });
 
   test("an update leads with the links it added", async () => {
-    renderImporter(fakeClient([imported({ updated: true, newLinks: 12 })]));
+    renderImporter(fakeClient([imported({ how: "updated", newLinks: 12 })]));
     fireEvent.drop(screen.getByTestId("drop-zone"), {
       dataTransfer: { files: [fileNamed("newer.txt")], getData: () => "" },
     });
@@ -591,4 +594,72 @@ test("the worker isn't asked for until something is imported", async () => {
   expect(connect).toHaveBeenCalled();
   unmount();
   expect(client.terminate).not.toHaveBeenCalled();
+});
+
+describe("re-extracting a source (§6.4)", () => {
+  // What the Sources dialog does: ask the flow to read a source again.
+  function Reextract() {
+    const flow = use(ImportFlowContext);
+    return (
+      <button
+        type="button"
+        aria-disabled={flow?.busy}
+        onClick={() =>
+          flow?.reextract({ id: "chat", name: "Me" }, { dateOrder: "MDY" })
+        }
+      >
+        Read it again
+      </button>
+    );
+  }
+
+  test("runs as an import does: progress, then what came of it", async () => {
+    const client = fakeClient();
+    let finish: (value: Imported) => void = () => {};
+    client.reextract.mockImplementation(async (_id, _choice, onProgress) => {
+      onProgress?.({ phase: "parsing" });
+      return new Promise<Imported>((resolve) => (finish = resolve));
+    });
+    render(
+      <Importer connect={() => client} library>
+        <Reextract />
+      </Importer>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Read it again" }));
+
+    const progress = await screen.findByRole("region", {
+      name: "Import progress",
+    });
+    expect(within(progress).getByText("Re-extracting “Me”")).toBeTruthy();
+    expect(client.reextract).toHaveBeenCalledWith(
+      "chat",
+      { dateOrder: "MDY" },
+      expect.any(Function),
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Read it again" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+
+    await act(async () =>
+      finish(imported({ name: "Me", how: "reextracted", newLinks: 4644 })),
+    );
+    expect(screen.getByText("Read again: 4,644 links found")).toBeTruthy();
+    expect(client.scan).not.toHaveBeenCalled();
+  });
+
+  test("a failure says the source was left as it was", async () => {
+    const client = fakeClient();
+    client.reextract.mockRejectedValue(new WorkerError("unexpected", "disk"));
+    render(
+      <Importer connect={() => client} library>
+        <Reextract />
+      </Importer>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Read it again" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Something went wrong re-extracting “Me”, and it was left as it was.",
+    );
+  });
 });

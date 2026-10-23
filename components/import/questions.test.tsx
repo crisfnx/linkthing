@@ -35,11 +35,12 @@ function inProcessClient(db: LinkVaultDb) {
     terminate: vi.fn(),
     load: vi.fn(),
     deleteSource: vi.fn(),
+    reextract: vi.fn(),
     scan: async (input: ScanInput) => (await scanInput(db, input)).result,
     start: vi.fn<ExtractClient["start"]>(async () => ({
       sourceId: "new",
       name: "new",
-      updated: false,
+      how: "new",
       newLinks: 1,
       stats: {
         messages: 1,
@@ -85,6 +86,7 @@ const QUESTIONS = {
   "date-order": "How are dates written in this chat?",
   duplicate: "You imported this file on",
   update: "This looks like a newer export of",
+  replace: "You already have a source called",
 };
 
 function questionsShown(dialog: HTMLElement) {
@@ -154,4 +156,54 @@ test("the answer goes to the save: an accepted update", async () => {
     ),
   );
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("a changed plaintext.txt, named as a stored source, asks to replace it", async () => {
+  vi.stubGlobal("navigator", { language: "en-GB" });
+  const db = createDb(`test-${crypto.randomUUID()}`);
+  opened.push(db);
+  // An earlier plaintext.txt, with other text in it.
+  const earlier = "Notes\nhttps://example.com/older-page";
+  const sourceId = crypto.randomUUID();
+  const { links, stats } = extractLinks(earlier, sourceId, "plaintext");
+  await db.sources.add({
+    id: sourceId,
+    name: "plaintext.txt",
+    kind: "plaintext",
+    adapterVersion: 1,
+    importedAt: Date.now(),
+    updatedAt: Date.now(),
+    stats,
+    options: {},
+  });
+  await db.sourceParts.add({
+    id: crypto.randomUUID(),
+    sourceId,
+    importedAt: Date.now(),
+    byteSize: earlier.length,
+    contentHash: await sha256(new TextEncoder().encode(earlier)),
+    fileName: "plaintext.txt",
+    raw: new Uint8Array() as unknown as Blob,
+  });
+  await db.links.bulkAdd(links);
+
+  const client = inProcessClient(db);
+  render(<Importer connect={() => client} />);
+  fireEvent.drop(screen.getByTestId("drop-zone"), {
+    dataTransfer: {
+      files: [new File([fixture("plaintext.txt")], "plaintext.txt")],
+      getData: () => "",
+    },
+  });
+  const dialog = await screen.findByRole("dialog");
+  expect(questionsShown(dialog)).toEqual(["replace"]);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Replace “plaintext.txt”" }),
+  );
+  await waitFor(() =>
+    expect(client.start).toHaveBeenCalledWith(
+      { kind: "plaintext", replaceOf: sourceId },
+      expect.any(Function),
+    ),
+  );
 });

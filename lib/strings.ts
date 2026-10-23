@@ -80,6 +80,9 @@ export const strings = {
     remaining === 0
       ? `Importing ${label}`
       : `Importing ${label} (${count(remaining, "more file")} after this)`,
+  reextracting: (name: string) => `Re-extracting “${name}”`,
+  reextractFailed: (name: string) =>
+    `Something went wrong re-extracting “${name}”, and it was left as it was.`,
   progressLabel: "Import progress",
   phaseStatus: (phase: ImportPhase) => `${PHASES[phase]}…`,
   largeInput: (bytes: number) =>
@@ -89,6 +92,9 @@ export const strings = {
   summaryHeading: "Imported",
   linksFound: (n: number) => count(n, "link") + " found",
   newLinksAdded: (n: number) => `${count(n, "new link")} added to this chat`,
+  replacedLinks: (n: number) =>
+    `Replaced with the new file: ${count(n, "link")} found`,
+  reextractedLinks: (n: number) => `Read again: ${count(n, "link")} found`,
   noLinks: (messages: number) =>
     `No links found in ${count(messages, "message")}.`,
   links: "Links",
@@ -136,6 +142,10 @@ export const strings = {
     addTo: (sourceName: string, newLinks: number) =>
       `Add its new messages to “${sourceName}” (${count(newLinks, "new link")})`,
     asNewSource: "Import it as a new source",
+    replace: (sourceName: string) =>
+      `You already have a source called “${sourceName}”.`,
+    replaceIt: "Replace it with this file (stars stay)",
+    replaceSource: (sourceName: string) => `Replace “${sourceName}”`,
     kind: "Parts of this look like a chat export. How should it be read?",
     readAs: (kind: Source["kind"]) => READ_AS[kind],
     dateOrder: (written: string | undefined) =>
@@ -260,6 +270,20 @@ export const strings = {
     confirmDelete: (name: string, links: number) =>
       `Delete “${name}” and its ${count(links, "link")}? Stars stay, for if you import these links again.`,
     keep: "Keep it",
+    reextract: "Re-extract",
+    readAs: "Read it as",
+    datesAre: "Dates are written",
+    order: (order: "DMY" | "MDY" | "YMD") =>
+      ({
+        DMY: "Day first (31/12/2026)",
+        MDY: "Month first (12/31/2026)",
+        YMD: "Year first (2026-12-31)",
+      })[order],
+    onlyAsChat:
+      "Updated from several exports, so it can only be read as a chat.",
+    newerReader: "read by an older version: re-extract to use the current one",
+    reextractNote:
+      "Its links are read again from the text it keeps. Stars stay.",
     deleting: (name: string) => `Deleting “${name}”…`,
     deleted: (name: string, links: number) =>
       `Deleted “${name}” and ${count(links, "link")}.`,

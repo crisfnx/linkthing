@@ -1,5 +1,6 @@
 "use client";
 
+import type { Job } from "@/hooks/useImport";
 import { LARGE_INPUT_BYTES, MAX_INPUT_BYTES } from "@/lib/import/limits";
 import type {
   ImportPhase,
@@ -10,6 +11,7 @@ import { strings } from "@/lib/strings";
 const PHASES = Object.keys(strings.phases) as ImportPhase[];
 
 interface Props {
+  job: Job;
   label: string;
   size: number;
   progress: Progress;
@@ -22,6 +24,7 @@ interface Props {
 // the Importer's status line, not from here. A large input gets a note that
 // it will take a while; one over the limit is refused straight away.
 export function ImportProgress({
+  job,
   label,
   size,
   progress,
@@ -33,7 +36,11 @@ export function ImportProgress({
 
   return (
     <section className="flex flex-col gap-3" aria-label={strings.progressLabel}>
-      <p className="font-medium">{strings.importing(label, remaining)}</p>
+      <p className="font-medium">
+        {job === "reextract"
+          ? strings.reextracting(label)
+          : strings.importing(label, remaining)}
+      </p>
       {size > LARGE_INPUT_BYTES && size <= MAX_INPUT_BYTES && (
         <p className="text-sm">{strings.largeInput(size)}</p>
       )}

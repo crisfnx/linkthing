@@ -5,6 +5,7 @@ import type {
   DateOrder,
   Message,
 } from "@/lib/extract/types";
+import { ADAPTER_VERSIONS } from "./versions";
 
 // One header line (PRD §3): an optional U+200E and "[", a date in any order
 // with . / or - between the fields (Korean exports add spaces and a final
@@ -211,7 +212,7 @@ function firstNonEmptyLines(text: string, count: number): string[] {
 
 export const whatsapp: Adapter = {
   kind: "whatsapp",
-  version: 1,
+  version: ADAPTER_VERSIONS.whatsapp!,
 
   detect({ text }) {
     const lines = firstNonEmptyLines(text, DETECT_LINES);

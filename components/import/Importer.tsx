@@ -8,6 +8,7 @@ import { strings } from "@/lib/strings";
 import type { ExtractClient } from "@/lib/workers/client";
 import type { WorkerErrorCode } from "@/lib/workers/protocol";
 import { DropZone } from "./DropZone";
+import { ImportFlowContext } from "./ImportFlow";
 import { ImportDialog } from "./ImportDialog";
 import { ImportForm } from "./ImportForm";
 import { ImportPanel } from "./ImportPanel";
@@ -65,10 +66,8 @@ export function Importer({
       ? {}
       : new Promise((answer) => setAsking({ scan, answer }));
 
-  const { state, importFiles, importText, cancel, retry, dismiss } = useImport({
-    connect,
-    decide,
-  });
+  const { state, importFiles, importText, reextract, cancel, retry, dismiss } =
+    useImport({ connect, decide });
   const running = state.status === "running";
   const results = "results" in state ? state.results : [];
   const [panelOpen, setPanelOpen] = useState(false);
@@ -99,6 +98,7 @@ export function Importer({
     <>
       {state.status === "running" && (
         <ImportProgress
+          job={state.job}
           label={state.label}
           size={state.size}
           progress={state.progress}
@@ -121,7 +121,11 @@ export function Importer({
       )}
       {state.status === "failed" && (
         <div role="alert" className="flex flex-col gap-1">
-          <p>{strings.errors[state.code](state.label)}</p>
+          <p>
+            {state.job === "reextract" && state.code === "unexpected"
+              ? strings.reextractFailed(state.label)
+              : strings.errors[state.code](state.label)}
+          </p>
           {state.code === "unexpected" && (
             <p className="font-mono text-sm opacity-70">{state.message}</p>
           )}
@@ -178,7 +182,14 @@ export function Importer({
               )}
             </div>
           )}
-          {children}
+          <ImportFlowContext
+            value={{
+              busy: running,
+              reextract: (source, choice) => void reextract(source, choice),
+            }}
+          >
+            {children}
+          </ImportFlowContext>
         </div>
       </DropZone>
     );

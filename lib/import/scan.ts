@@ -18,7 +18,8 @@ export type ScanInput = { file: File } | { text: string };
 
 // What the import dialog may have to settle before the parse (PRD §6.1). An
 // empty list means the parse starts straight away.
-export type Question = "adapter" | "date-order" | "duplicate" | "update";
+export type Question =
+  "adapter" | "date-order" | "duplicate" | "update" | "replace";
 
 export interface DuplicateOf {
   sourceId: string;
@@ -30,6 +31,11 @@ export interface UpdateCandidate {
   sourceId: string;
   sourceName: string;
   newLinks: number; // links the update would add
+}
+
+export interface ReplaceCandidate {
+  sourceId: string;
+  sourceName: string;
 }
 
 export interface ScanResult {
@@ -48,6 +54,7 @@ export interface ScanResult {
   dateSample?: { written: string; dayFirst: number; monthFirst: number };
   duplicateOf?: DuplicateOf;
   updateCandidate?: UpdateCandidate;
+  replaceCandidate?: ReplaceCandidate;
   questions: Question[];
 }
 
@@ -154,18 +161,45 @@ async function findUpdate(
   return best?.candidate;
 }
 
+// A source that isn't a chat and goes by this file's name, or that an
+// earlier file of this name went into, renamed since (§6.1): the file is
+// offered as its replacement. Chats take updates instead. The latest
+// changed wins when there are several.
+async function findReplace(
+  db: LinkVaultDb,
+  fileName: string,
+): Promise<ReplaceCandidate | undefined> {
+  const fromParts = new Set(
+    (await db.sourceParts.filter((p) => p.fileName === fileName).toArray()).map(
+      (part) => part.sourceId,
+    ),
+  );
+  const [latest] = (
+    await db.sources
+      .filter(
+        (s) =>
+          !CHAT_KINDS.has(s.kind) &&
+          (s.name === fileName || fromParts.has(s.id)),
+      )
+      .toArray()
+  ).sort((a, b) => b.updatedAt - a.updatedAt);
+  return latest && { sourceId: latest.id, sourceName: latest.name };
+}
+
 function questionsFor(result: ScanResult): Question[] {
   const questions: Question[] = [];
   if (result.detection.needsConfirmation) questions.push("adapter");
   if (result.dateOrderAmbiguous) questions.push("date-order");
   if (result.duplicateOf) questions.push("duplicate");
   if (result.updateCandidate) questions.push("update");
+  if (result.replaceCandidate) questions.push("replace");
   return questions;
 }
 
 // The scan pass (PRD §6.1): reads the whole input once and finds out whether
 // the import dialog has to ask anything before the parse. A file imported
-// before isn't also offered as an update: it would add nothing.
+// before isn't also offered as an update or a replacement: it would change
+// nothing.
 export async function scanInput(
   db: LinkVaultDb,
   input: ScanInput,
@@ -216,6 +250,9 @@ export async function scanInput(
   else if (CHAT_KINDS.has(kind)) {
     const update = await findUpdate(db, text, kind, options);
     if (update) result.updateCandidate = update;
+  } else if (result.fileName !== undefined) {
+    const replace = await findReplace(db, result.fileName);
+    if (replace) result.replaceCandidate = replace;
   }
 
   result.questions = questionsFor(result);

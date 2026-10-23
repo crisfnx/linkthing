@@ -9,6 +9,7 @@ import { sha256 } from "@/lib/extract/keys";
 import { extractLinks, linkCounts, linkIdsFor } from "@/lib/extract/pipeline";
 import { normalizeText } from "@/lib/extract/text";
 import type { DateOrder } from "@/lib/extract/types";
+import { saveImport } from "./save";
 import { scanInput } from "./scan";
 
 const fixtureBytes = (name: string) =>
@@ -291,5 +292,72 @@ describe("a newer export of a stored chat", () => {
       text: "https://x.com/i/status/1637000000000000002",
     });
     expect(result.updateCandidate).toBeUndefined();
+  });
+});
+
+describe("a file of the same name, not a chat (§6.1)", () => {
+  const file = (text: string, name = "notes.txt") => ({
+    file: new File([text], name),
+  });
+
+  test("is offered as the replacement of the source of that name", async () => {
+    const db = freshDb();
+    const scan = await scanInput(db, file("https://example.com/a"));
+    const source = await saveImport(db, scan, {});
+    const { result } = await scanInput(db, file("https://example.com/b"));
+    expect(result.replaceCandidate).toEqual({
+      sourceId: source.sourceId,
+      sourceName: "notes.txt",
+    });
+    expect(result.questions).toEqual(["replace"]);
+  });
+
+  test("and of one renamed since, by the file it came from", async () => {
+    const db = freshDb();
+    const source = await saveImport(
+      db,
+      await scanInput(db, file("https://example.com/a")),
+      {},
+    );
+    await db.sources.update(source.sourceId, { name: "Work notes" });
+    const { result } = await scanInput(db, file("https://example.com/b"));
+    expect(result.replaceCandidate?.sourceName).toBe("Work notes");
+  });
+
+  test("the same file again is a duplicate, not a replacement", async () => {
+    const db = freshDb();
+    await saveImport(
+      db,
+      await scanInput(db, file("https://example.com/a")),
+      {},
+    );
+    const { result } = await scanInput(db, file("https://example.com/a"));
+    expect(result.questions).toEqual(["duplicate"]);
+    expect(result.replaceCandidate).toBeUndefined();
+  });
+
+  test("other names, pasted text and chats are never offered one", async () => {
+    const db = freshDb();
+    await saveImport(
+      db,
+      await scanInput(db, file("https://example.com/a")),
+      {},
+    );
+    for (const input of [
+      file("https://example.com/b", "other.txt"),
+      { text: "https://example.com/b" },
+    ]) {
+      expect(
+        (await scanInput(db, input)).result.replaceCandidate,
+      ).toBeUndefined();
+    }
+    const chat = await scanInput(db, dropped("whatsapp-update-older.txt"));
+    await saveImport(db, chat, {});
+    const again = await scanInput(
+      db,
+      dropped("whatsapp-update-newer.txt", "whatsapp-update-older.txt"),
+    );
+    expect(again.result.replaceCandidate).toBeUndefined();
+    expect(again.result.updateCandidate).toBeDefined();
   });
 });

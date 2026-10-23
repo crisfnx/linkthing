@@ -1,8 +1,12 @@
 "use client";
 
+import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { LinkVaultDb } from "@/lib/db/schema";
 import type { Source } from "@/lib/db/types";
+import { ADAPTER_VERSIONS } from "@/lib/extract/adapters/versions";
+import type { DateOrder, SourceKind } from "@/lib/extract/types";
+import type { ReextractChoice } from "@/lib/import/reextract";
 import {
   MAX_SOURCE_NAME,
   renameSource,
@@ -21,7 +25,15 @@ interface Props {
   // it's modal, so a notice outside would be inert and unheard.
   say: (text: string) => void;
   notice?: ReactNode;
+  // Re-extract runs as an import does (the Importer's flow), so it closes
+  // the dialog to show its progress; none while another job runs.
+  onReextract?: (source: Source, choice: ReextractChoice) => void;
+  jobRunning?: boolean;
 }
+
+// The adapters a source can be read with (§3); Phase 1.5 adds more.
+const READERS: readonly SourceKind[] = ["whatsapp", "plaintext"];
+const ORDERS: readonly DateOrder[] = ["DMY", "MDY", "YMD"];
 
 const button =
   "rounded-md border border-current/40 px-2.5 py-1 text-sm font-medium aria-disabled:opacity-50";
@@ -29,7 +41,19 @@ const button =
 type Editing =
   | { kind: "rename"; sourceId: string; error?: string }
   | { kind: "delete"; sourceId: string }
-  | { kind: "deleting"; sourceId: string };
+  | { kind: "deleting"; sourceId: string }
+  | {
+      kind: "reextract";
+      sourceId: string;
+      read: SourceKind;
+      dateOrder: DateOrder;
+    };
+
+// Read by an adapter older than the current one, which may read it better.
+function readByOlder(source: Source): boolean {
+  const current = ADAPTER_VERSIONS[source.kind];
+  return current !== undefined && source.adapterVersion < current;
+}
 
 function details(source: Source): string {
   const { stats, kind, importedAt, updatedAt } = source;
@@ -42,10 +66,12 @@ function details(source: Source): string {
   }
   parts.push(strings.sources.imported(importedAt));
   if (updatedAt !== importedAt) parts.push(strings.sources.updated(updatedAt));
+  if (readByOlder(source)) parts.push(strings.sources.newerReader);
   return parts.join(" · ");
 }
 
-// Every source, to rename or delete (§6.4), in the browser's own <dialog>.
+// Every source, to rename, re-extract or delete (§6.4), in the browser's own
+// <dialog>.
 // Rename edits in place: Enter saves, Esc puts the name back without closing
 // the dialog. Delete asks first, in place, and says how many links go; stars
 // stay, keyed by the links' addresses. When a source leaves the list, focus
@@ -58,12 +84,23 @@ export function SourcesDialog({
   onClose,
   say,
   notice,
+  onReextract,
+  jobRunning = false,
 }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [draft, setDraft] = useState("");
+  // Stored parts per source: a chat updated from several exports can only be
+  // read as a chat, since only chat messages merge by key.
+  const parts = useLiveQuery(async () => {
+    const counts = new Map<string, number>();
+    for (const id of await db.sourceParts.orderBy("sourceId").keys()) {
+      counts.set(String(id), (counts.get(String(id)) ?? 0) + 1);
+    }
+    return counts;
+  }, [db]);
   // Where focus goes once a rename or a delete question is put away: the
   // button that opened it, which comes back with the next render.
   const focusAfter = useRef<string | null>(null);
@@ -128,6 +165,15 @@ export function SourcesDialog({
     }
   }
 
+  function startReextract(source: Source) {
+    setEditing({
+      kind: "reextract",
+      sourceId: source.id,
+      read: READERS.includes(source.kind) ? source.kind : "plaintext",
+      dateOrder: source.options.dateOrder ?? "DMY",
+    });
+  }
+
   const busy = editing?.kind === "deleting";
 
   return (
@@ -143,7 +189,7 @@ export function SourcesDialog({
           if (!busy) {
             stopEditing({
               sourceId: editing.sourceId,
-              action: editing.kind === "rename" ? "rename" : "delete",
+              action: editing.kind,
             });
           }
         }
@@ -219,6 +265,19 @@ export function SourcesDialog({
                       >
                         {strings.sources.rename}
                       </button>
+                      {onReextract && (
+                        <button
+                          type="button"
+                          id={actionId(source.id, "reextract")}
+                          className={button}
+                          aria-disabled={busy || jobRunning}
+                          onClick={() =>
+                            !busy && !jobRunning && startReextract(source)
+                          }
+                        >
+                          {strings.sources.reextract}
+                        </button>
+                      )}
                       <button
                         type="button"
                         id={actionId(source.id, "delete")}
@@ -235,6 +294,103 @@ export function SourcesDialog({
                   </div>
                 )}
                 <p className="text-sm text-foreground/65">{details(source)}</p>
+                {mine?.kind === "reextract" && onReextract && (
+                  <form
+                    aria-label={strings.sources.reextract}
+                    className="flex flex-col gap-3 rounded-md border border-current/30 p-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      onReextract(source, {
+                        kind: mine.read,
+                        ...(mine.read === "whatsapp"
+                          ? { dateOrder: mine.dateOrder }
+                          : {}),
+                      });
+                      dialog.current?.close();
+                    }}
+                  >
+                    <fieldset className="flex flex-col gap-1">
+                      <legend className="mb-1 font-medium">
+                        {strings.sources.readAs}
+                      </legend>
+                      {READERS.map((reader) => {
+                        const onlyChat =
+                          (parts?.get(source.id) ?? 1) > 1 &&
+                          reader !== "whatsapp";
+                        return (
+                          <label
+                            key={reader}
+                            className="flex items-start gap-2"
+                          >
+                            <input
+                              type="radio"
+                              name={`${titleId}-${source.id}-read`}
+                              checked={mine.read === reader}
+                              disabled={onlyChat}
+                              onChange={() =>
+                                setEditing({ ...mine, read: reader })
+                              }
+                              className="mt-1.5"
+                            />
+                            <span className={onlyChat ? "opacity-60" : ""}>
+                              {strings.dialog.readAs(reader)}
+                              {onlyChat && (
+                                <span className="block text-sm">
+                                  {strings.sources.onlyAsChat}
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </fieldset>
+                    {mine.read === "whatsapp" && (
+                      <fieldset className="flex flex-col gap-1">
+                        <legend className="mb-1 font-medium">
+                          {strings.sources.datesAre}
+                        </legend>
+                        {ORDERS.filter(
+                          (order) =>
+                            order !== "YMD" ||
+                            source.options.dateOrder === "YMD",
+                        ).map((order) => (
+                          <label
+                            key={order}
+                            className="flex items-center gap-2"
+                          >
+                            <input
+                              type="radio"
+                              name={`${titleId}-${source.id}-dates`}
+                              checked={mine.dateOrder === order}
+                              onChange={() =>
+                                setEditing({ ...mine, dateOrder: order })
+                              }
+                            />
+                            {strings.sources.order(order)}
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                    <p className="text-sm">{strings.sources.reextractNote}</p>
+                    <div className="flex gap-2">
+                      <button type="submit" autoFocus className={button}>
+                        {strings.sources.reextract}
+                      </button>
+                      <button
+                        type="button"
+                        className={button}
+                        onClick={() =>
+                          stopEditing({
+                            sourceId: source.id,
+                            action: "reextract",
+                          })
+                        }
+                      >
+                        {strings.sources.cancel}
+                      </button>
+                    </div>
+                  </form>
+                )}
                 {(mine?.kind === "delete" || mine?.kind === "deleting") && (
                   <div
                     role="group"

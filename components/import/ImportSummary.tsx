@@ -14,15 +14,19 @@ export function ImportSummary({ results }: { results: Imported[] }) {
       <h2 id={headingId} className="text-lg font-semibold">
         {strings.summaryHeading}
       </h2>
-      {results.map(({ sourceId, name, updated, stats, newLinks }) => (
+      {results.map(({ sourceId, name, how, stats, newLinks }) => (
         <article key={sourceId} className="flex flex-col gap-2">
           <h3 className="font-semibold">{name}</h3>
           <p>
             {stats.links === 0
               ? strings.noLinks(stats.messages)
-              : updated
+              : how === "updated"
                 ? strings.newLinksAdded(newLinks)
-                : strings.linksFound(stats.links)}
+                : how === "replaced"
+                  ? strings.replacedLinks(stats.links)
+                  : how === "reextracted"
+                    ? strings.reextractedLinks(stats.links)
+                    : strings.linksFound(stats.links)}
           </p>
           {stats.links > 0 && (
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">

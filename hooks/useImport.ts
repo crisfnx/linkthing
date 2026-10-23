@@ -1,17 +1,23 @@
 import { useRef, useState } from "react";
 import { inputSize } from "@/lib/import/limits";
 import type { ImportProgress } from "@/lib/import/options";
+import type { ReextractChoice } from "@/lib/import/reextract";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import { strings } from "@/lib/strings";
 import { WorkerError, type ExtractClient } from "@/lib/workers/client";
 import type { WorkerErrorCode } from "@/lib/workers/protocol";
 
+// An import, or a stored source read again (§6.4): the same queue, progress,
+// cancel and summary.
+export type Job = "import" | "reextract";
+
 export type ImportState =
   | { status: "idle" }
   | {
       status: "running";
-      label: string; // the file's name, or "Pasted text"
+      job: Job;
+      label: string; // the file's name, "Pasted text", or the source's name
       size: number; // in bytes, for the large-file note
       progress: ImportProgress;
       remaining: number; // files queued after this one
@@ -20,6 +26,7 @@ export type ImportState =
   | { status: "cancelled"; results: Imported[] }
   | {
       status: "failed";
+      job: Job;
       label: string;
       code: WorkerErrorCode;
       message: string;
@@ -41,13 +48,16 @@ interface Options {
   decide?: Decide;
 }
 
-export interface Item {
-  label: string;
-  input: ScanInput;
-}
+export type Item =
+  | { label: string; input: ScanInput }
+  | {
+      label: string;
+      reextract: { sourceId: string; choice: ReextractChoice };
+    };
 
 // Imports files or text one at a time through the worker (§8.2): scan, decide,
-// save. A cancel or a failure stops the rest of the queue.
+// save. A re-extract skips the scan and goes straight to the worker. A cancel
+// or a failure stops the rest of the queue.
 export function useImport({ connect, decide = acceptScan }: Options) {
   const [state, setState] = useState<ImportState>({ status: "idle" });
   const busy = useRef(false);
@@ -63,18 +73,26 @@ export function useImport({ connect, decide = acceptScan }: Options) {
     const results = [...earlier];
     let last: ImportState = { status: "done", results };
 
-    for (const [i, { label, input }] of items.entries()) {
+    for (const [i, item] of items.entries()) {
+      const { label } = item;
+      const job: Job = "reextract" in item ? "reextract" : "import";
       const report = (progress: ImportProgress) =>
         setState({
           status: "running",
+          job,
           label,
-          size: inputSize(input),
+          size: "input" in item ? inputSize(item.input) : 0,
           progress,
           remaining: items.length - i - 1,
         });
       report({ phase: "reading" });
       try {
-        const choice = await decide(await worker.scan(input, report));
+        if ("reextract" in item) {
+          const { sourceId, choice } = item.reextract;
+          results.push(await worker.reextract(sourceId, choice, report));
+          continue;
+        }
+        const choice = await decide(await worker.scan(item.input, report));
         if (cancelled.current) {
           throw new WorkerError("cancelled", "Cancelled before saving");
         }
@@ -87,6 +105,7 @@ export function useImport({ connect, decide = acceptScan }: Options) {
             ? { status: "cancelled", results }
             : {
                 status: "failed",
+                job,
                 label,
                 code,
                 message,
@@ -104,6 +123,13 @@ export function useImport({ connect, decide = acceptScan }: Options) {
     state,
     importFiles: (files: File[]) =>
       importAll(files.map((file) => ({ label: file.name, input: { file } }))),
+    reextract: (
+      source: { id: string; name: string },
+      choice: ReextractChoice,
+    ) =>
+      importAll([
+        { label: source.name, reextract: { sourceId: source.id, choice } },
+      ]),
     importText: (text: string) =>
       importAll(
         text.trim() === ""

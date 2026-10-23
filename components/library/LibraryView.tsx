@@ -1,6 +1,14 @@
 "use client";
 
-import { useDeferredValue, useEffect, useId, useRef, useState } from "react";
+import {
+  use,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
+import { ImportFlowContext } from "@/components/import/ImportFlow";
 import type { LinkVaultDb } from "@/lib/db/schema";
 import type { Source } from "@/lib/db/types";
 import type { Link } from "@/lib/extract/types";
@@ -74,6 +82,8 @@ export function LibraryView({
   const openKeys = open.rows === rows ? open.keys : NO_KEYS;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  // Re-extract runs through the Importer's flow, with its progress and cancel.
+  const flow = use(ImportFlowContext);
   // The link whose details are open, kept with the rows it belongs to.
   const [details, setDetails] = useState<{
     rows: LibraryRows;
@@ -341,6 +351,12 @@ export function LibraryView({
           onClose={() => setSourcesOpen(false)}
           say={say}
           notice={said}
+          onReextract={
+            flow
+              ? (source, choice) => flow.reextract(source, choice)
+              : undefined
+          }
+          jobRunning={flow?.busy}
         />
       )}
       {detailsRow === null && !sourcesOpen && said}

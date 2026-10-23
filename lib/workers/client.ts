@@ -1,4 +1,5 @@
 import type { ImportProgress } from "@/lib/import/options";
+import type { ReextractChoice } from "@/lib/import/reextract";
 import type { Imported, ImportChoice } from "@/lib/import/save";
 import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import type { LibraryRows } from "@/lib/library/rows";
@@ -34,6 +35,12 @@ export interface ExtractClient {
   scan(input: ScanInput, onProgress?: OnProgress): Promise<ScanResult>;
   // The save pass, for the last scan. Rejects with "cancelled" on cancel.
   start(choice?: ImportChoice, onProgress?: OnProgress): Promise<Imported>;
+  // A stored source read again (§6.4). Rejects with "cancelled" on cancel.
+  reextract(
+    sourceId: string,
+    choice: ReextractChoice,
+    onProgress?: OnProgress,
+  ): Promise<Imported>;
   cancel(): void;
   // The whole library as rows (§5), for browsing.
   load(): Promise<LibraryRows>;
@@ -106,6 +113,10 @@ export function createExtractClient(
     async start(choice = {}, onProgress) {
       const reply = await call({ type: "start", choice }, "done", onProgress);
       return reply.imported;
+    },
+    async reextract(sourceId, choice, onProgress) {
+      const message = { type: "reextract" as const, sourceId, choice };
+      return (await call(message, "done", onProgress)).imported;
     },
     cancel: () => send({ type: "cancel" }),
     load: async () => (await call({ type: "load" }, "rows")).rows,
