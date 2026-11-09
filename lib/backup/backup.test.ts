@@ -344,6 +344,30 @@ describe("a file that can't be restored is refused, and nothing is written", () 
     const broken = new Blob([whole.slice(0, 40), whole.slice(200)]);
     await refused(broken, /damaged|isn't valid JSON|isn't a LinkVault backup/);
   });
+
+  // Opened and linked to once restored, so only web addresses get in.
+  test.each([
+    ["link", "canonicalUrl"],
+    ["link", "url"],
+    ["annotation", "url"],
+  ] as const)("%s.%s that isn't a web address", async (kind, field) => {
+    const lines = await linesOf((await writeBackup(await library())).file);
+    const at = lines.findIndex((l) => kind in l);
+    const edited = structuredClone(lines);
+    (edited[at]![kind] as Record<string, string>)[field] =
+      "javascript:alert(1)";
+
+    const db = freshDb();
+    await expect(restoreBackup(db, gzipLines(edited))).rejects.toMatchObject({
+      code: "invalid-backup",
+      message: expect.stringMatching(
+        new RegExp(`^Line ${at + 1} isn't a record LinkVault can read`),
+      ),
+    });
+    expect(await db.sources.count()).toBe(0);
+    expect(await db.links.count()).toBe(0);
+    expect(await db.annotations.count()).toBe(0);
+  });
 });
 
 describe("importing a backup by mistake", () => {

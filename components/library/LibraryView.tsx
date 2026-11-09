@@ -21,6 +21,7 @@ import {
   type ExportScope,
 } from "@/lib/export/scope";
 import type { Link } from "@/lib/extract/types";
+import { hasWebScheme } from "@/lib/extract/url/web-scheme";
 import { starredKeys, toggleStar } from "@/lib/library/details";
 import { starredFlags, textAt, type LibraryRows } from "@/lib/library/rows";
 import {
@@ -173,8 +174,11 @@ export function LibraryView({
 
   // The canonical URL: cleaned of tracking, so that is what's opened and
   // copied (§4.4). noopener: the page opened can't reach back into this one.
+  // Only a web address, as the list's link: a restore checks this too, but
+  // a `javascript:` URL opened here would run in this page.
   function openLink(row: number) {
-    window.open(textAt(rows.urls, row), "_blank", "noopener,noreferrer");
+    const url = textAt(rows.urls, row);
+    if (hasWebScheme(url)) window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function copy(row: number) {

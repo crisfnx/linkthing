@@ -14,6 +14,7 @@ import type {
   StoredSettings,
 } from "@/lib/db/types";
 import { LINK_KINDS, type Link } from "@/lib/extract/types";
+import { hasWebScheme } from "@/lib/extract/url/web-scheme";
 import { checkpoint, type ImportOptions } from "@/lib/import/options";
 import {
   mergeAnnotations,
@@ -40,6 +41,11 @@ export class BackupError extends Error {
 // --- Schemas ----------------------------------------------------------------------
 
 const time = z.number().finite();
+// Every URL LinkVault stores is http or https; one in a file could be
+// anything, and is opened and linked to once restored.
+const webUrl = z.string().refine(hasWebScheme, {
+  error: "Expected a URL starting with http:// or https://",
+});
 const count = z.number().int().nonnegative();
 const DATE_ORDERS = ["DMY", "MDY", "YMD"] as const;
 const SOURCE_KINDS = [
@@ -97,8 +103,8 @@ const link = z.object({
   id: z.string().min(1),
   sourceId: z.string().min(1),
   messageKey: z.string().optional(),
-  url: z.string().min(1),
-  canonicalUrl: z.string().min(1),
+  url: webUrl,
+  canonicalUrl: webUrl,
   urlKey: z.string().min(1),
   host: z.string(),
   domain: z.string(),
@@ -117,7 +123,7 @@ const link = z.object({
 
 const annotation = z.object({
   urlKey: z.string().min(1),
-  url: z.string().min(1),
+  url: webUrl,
   starred: z.literal(1).optional(),
   tags: z.array(z.string()).optional(),
   status: z.enum(["unread", "read", "archived"]).optional(),

@@ -460,6 +460,37 @@ describe("details", () => {
     expect(await screen.findByText("Link copied.")).toBeTruthy();
   });
 
+  // A restore refuses one, but a URL that isn't a web address is never
+  // opened or linked to: a `javascript:` one would run in this page.
+  test("o opens a web address, and nothing else", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await stored(
+      link("https://example.com/a", { canonicalUrl: "javascript:alert(1)" }),
+      link("https://example.com/b"),
+    );
+    // The bad one has no href, so it isn't exposed as a link.
+    const anchors = screen
+      .getAllByRole("listitem")
+      .map((li) => li.querySelector("a")!);
+    const bad = anchors.find((a) => !a.hasAttribute("href"))!;
+    const good = anchors.find((a) => a.hasAttribute("href"))!;
+    // Keys act on the row that has focus.
+    const press = (row: HTMLElement) => {
+      act(() => row.focus());
+      fireEvent.keyDown(row, { key: "o" });
+    };
+
+    press(bad);
+    expect(open).not.toHaveBeenCalled();
+    press(good);
+    expect(open).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledWith(
+      "https://example.com/b",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
   test("a copy the browser refuses says so too", async () => {
     vi.stubGlobal("navigator", {
       ...navigator,

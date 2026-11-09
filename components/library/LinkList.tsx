@@ -2,6 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { hasWebScheme } from "@/lib/extract/url/web-scheme";
 import { kindAt, textAt, type LibraryRows } from "@/lib/library/rows";
 import { displayUrl } from "@/lib/preview/display-url";
 import { strings } from "@/lib/strings";
@@ -123,7 +124,7 @@ function LinkRow({
       <div className="min-w-0 flex-1">
         <a
           ref={linkRef}
-          href={/^https?:\/\//i.test(url) ? url : undefined}
+          href={hasWebScheme(url) ? url : undefined}
           target="_blank"
           rel="noopener noreferrer"
           tabIndex={active ? 0 : -1}
