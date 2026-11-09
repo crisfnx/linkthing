@@ -87,7 +87,7 @@ describe("a new source", () => {
       id: sourceId,
       name: "Me",
       kind: "whatsapp",
-      adapterVersion: 1,
+      adapterVersion: 2,
       importedAt: expect.any(Number),
       updatedAt: source?.importedAt,
       stats: expected.stats,

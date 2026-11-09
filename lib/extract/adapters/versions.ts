@@ -6,5 +6,6 @@ import type { SourceKind } from "@/lib/extract/types";
 // stored source differently.
 export const ADAPTER_VERSIONS: Partial<Record<SourceKind, number>> = {
   plaintext: 1,
-  whatsapp: 1,
+  // 2: keeps the date of a message timed in a daylight-saving gap.
+  whatsapp: 2,
 };

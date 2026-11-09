@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { messageKey } from "@/lib/extract/keys";
 import { normalizeText } from "@/lib/extract/text";
 import type { Message } from "@/lib/extract/types";
 import { extractUrls } from "@/lib/extract/url/extract";
@@ -296,6 +297,43 @@ describe("other date and time formats", () => {
       text: "cut-off https://example.com/start",
     });
     expect(messages[0]?.timestamp).toBeUndefined();
+  });
+});
+
+// A chat written in one zone and imported in another can hold a time that
+// doesn't exist where it's read: 02:30 on the night the clocks go forward.
+describe("in a zone with daylight saving", () => {
+  const zone = process.env.TZ;
+  beforeAll(() => {
+    process.env.TZ = "Europe/Berlin";
+  });
+  afterAll(() => {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  });
+  const first = (text: string) => whatsapp.parse({ text })[0];
+
+  test("a message in the gap keeps its date and its key", () => {
+    // The zone took effect: 02:30 that night reads back as 03:30.
+    expect(new Date(2024, 2, 31, 2, 30).getHours()).toBe(3);
+
+    const message = first("31/03/2024, 02:30 - Cris: hi");
+    expect(message?.timestamp).toBe(Date.UTC(2024, 2, 31, 1, 30)); // 03:30 CEST
+    expect(message?.key).toBe(messageKey("2024-03-31 02:30", "Cris", "hi", 0));
+  });
+
+  test("a date or time that doesn't exist anywhere still gets none", () => {
+    // Day first, from the 13 in the second line.
+    const text = (line: string) => `${line}\n13/01/2024, 10:00 - Cris: x`;
+    expect(
+      first(text("31/02/2024, 10:00 - Cris: hi"))?.timestamp,
+    ).toBeUndefined();
+    expect(
+      first(text("01/02/2024, 25:00 - Cris: hi"))?.timestamp,
+    ).toBeUndefined();
+    expect(first(text("29/02/2024, 10:00 - Cris: hi"))?.timestamp).toBe(
+      at(2024, 2, 29, 10, 0),
+    );
   });
 });
 

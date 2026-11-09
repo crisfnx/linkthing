@@ -111,6 +111,10 @@ function to24Hour(hour: number, period: string | undefined): number {
   return hour;
 }
 
+// Days in a month (1–12), in UTC so no zone's daylight saving shifts it.
+const daysIn = (year: number, month: number) =>
+  new Date(Date.UTC(year, month, 0)).getUTCDate();
+
 // The wall-clock minute (for keys) and the epoch time in the browser's zone,
 // since exports carry no zone (§10).
 function toTime(header: Header, order: DateOrder) {
@@ -124,17 +128,24 @@ function toTime(header: Header, order: DateOrder) {
   const minute = Number(header.minute);
   const second = Number(header.second ?? 0);
 
-  const date = new Date(year, month - 1, day, hour, minute, second);
+  // Checked field by field, not by reading a local Date back: a time that
+  // doesn't exist in the browser's zone (02:30 on the night the clocks go
+  // forward) reads back an hour later, and the message would lose its date.
+  // The Date then gives such a time whatever moment it settles on.
   const valid =
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day &&
-    date.getHours() === hour &&
-    date.getMinutes() === minute;
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysIn(year, month) &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59;
 
   return {
     minuteKey: `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}`,
-    timestamp: valid ? date.getTime() : undefined,
+    timestamp: valid
+      ? new Date(year, month - 1, day, hour, minute, second).getTime()
+      : undefined,
   };
 }
 
