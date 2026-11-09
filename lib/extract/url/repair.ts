@@ -26,10 +26,17 @@ export function repairCandidate(raw: string, before: string): string {
   let url = raw;
   let marks = /[*_~]*$/.exec(before)?.[0] ?? "";
   // Brackets are counted once and the count kept as the end is trimmed:
-  // recounting per trimmed character was quadratic.
-  const brackets = new Map<string, number>();
-  for (const char of "()[]{}") brackets.set(char, count(url, char));
-  const bracketsOf = (char: string) => brackets.get(char) ?? 0;
+  // recounting per trimmed character was quadratic. Counted only when the
+  // URL first ends in a closing bracket, which most never do. Nothing
+  // trimmed before then is a bracket, so the count is the same.
+  let brackets: Map<string, number> | undefined;
+  const bracketsOf = (char: string) => {
+    if (!brackets) {
+      brackets = new Map();
+      for (const each of "()[]{}") brackets.set(each, count(url, each));
+    }
+    return brackets.get(char) ?? 0;
+  };
 
   for (;;) {
     const last = url.at(-1);
@@ -41,7 +48,7 @@ export function repairCandidate(raw: string, before: string): string {
       (opener !== undefined && bracketsOf(opener) < bracketsOf(last))
     ) {
       url = url.slice(0, -1);
-      if (opener !== undefined) brackets.set(last, bracketsOf(last) - 1);
+      if (opener !== undefined) brackets?.set(last, bracketsOf(last) - 1);
     } else if (EMPHASIS.includes(last) && marks.endsWith(last)) {
       url = url.slice(0, -1);
       marks = marks.slice(0, -1);
