@@ -76,8 +76,18 @@ export function startExtractWorker(): Worker {
   });
 }
 
+// The reply a request gets when the worker can't give one.
+const stoppedReply = (id: number, message: string): WorkerResponse => ({
+  id,
+  type: "error",
+  code: "unexpected",
+  message,
+});
+
+// onCrash: called once if the worker dies, so the page can start a new one.
 export function createExtractClient(
   worker: WorkerPort = startExtractWorker(),
+  onCrash?: () => void,
 ): ExtractClient {
   interface Pending {
     resolve: (response: WorkerResponse) => void;
@@ -85,6 +95,35 @@ export function createExtractClient(
   }
   let nextId = 0;
   const pending = new Map<number, Pending>();
+  // Why the worker will answer nothing more, once it has crashed or been
+  // terminated. Requests still waiting, and any sent later, fail with it as
+  // an ordinary "unexpected" error, which the import offers to try again.
+  let stopped: string | undefined;
+
+  function stop(reason: string) {
+    if (stopped !== undefined) return;
+    stopped = reason;
+    for (const [id, request] of pending) {
+      request.resolve(stoppedReply(id, reason));
+    }
+    pending.clear();
+  }
+
+  // An uncaught error, running out of memory, a script that failed to load,
+  // or a reply that couldn't be read. Without this, a crash during a large
+  // import left the progress screen up for good. An uncaught error doesn't
+  // always end a worker, so it is terminated to be sure, and its memory
+  // released.
+  function crash(event: Event) {
+    if (stopped !== undefined) return;
+    // ErrorEvent isn't defined outside browsers.
+    const detail = "message" in event ? String(event.message) : "";
+    stop(`The extraction worker stopped${detail ? `: ${detail}` : "."}`);
+    worker.terminate();
+    onCrash?.();
+  }
+  worker.addEventListener("error", crash);
+  worker.addEventListener("messageerror", crash);
 
   worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
     const response = event.data;
@@ -99,6 +138,10 @@ export function createExtractClient(
 
   function send(message: Unsent<WorkerRequest>, waiting?: Pending) {
     const id = nextId++;
+    if (stopped !== undefined) {
+      waiting?.resolve(stoppedReply(id, stopped));
+      return;
+    }
     if (waiting) pending.set(id, waiting);
     worker.postMessage({ ...message, id });
   }
@@ -157,6 +200,9 @@ export function createExtractClient(
       );
       return { file: reply.file, links: reply.links };
     },
-    terminate: () => worker.terminate(),
+    terminate() {
+      stop("The extraction worker was stopped.");
+      worker.terminate();
+    },
   };
 }

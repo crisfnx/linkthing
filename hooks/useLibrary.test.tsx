@@ -161,3 +161,23 @@ test("the page's worker starts when first asked for, once, and stops with the pa
   unmount();
   expect(client.terminate).toHaveBeenCalledOnce();
 });
+
+test("after the worker crashes, the next ask starts a new one", () => {
+  const crashes: (() => void)[] = [];
+  const create = vi.fn((onCrash: () => void) => {
+    crashes.push(onCrash);
+    return fakeClient(async () => rowsOf());
+  });
+  const { result } = renderHook(() => useExtractClient(create));
+  const first = result.current();
+
+  crashes[0]?.();
+  const second = result.current();
+  expect(second).not.toBe(first);
+  expect(create).toHaveBeenCalledTimes(2);
+
+  // The old worker's crash, reported late, doesn't drop the new one.
+  crashes[0]?.();
+  expect(result.current()).toBe(second);
+  expect(create).toHaveBeenCalledTimes(2);
+});

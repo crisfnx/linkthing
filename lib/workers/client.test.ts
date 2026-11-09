@@ -302,3 +302,71 @@ test("backup and restore through the worker; a bad file says why", async () => {
     message: "This isn't a LinkVault backup.",
   });
 });
+
+// A worker that takes requests and never answers, as one that dies mid-job;
+// emit plays the event the browser fires when it does.
+function stuckWorker() {
+  const target = new EventTarget();
+  const postMessage = vi.fn();
+  const terminate = vi.fn();
+  const port = {
+    postMessage,
+    addEventListener: target.addEventListener.bind(target),
+    terminate,
+  } as WorkerPort;
+  const emit = (type: "error" | "messageerror", message?: string) =>
+    target.dispatchEvent(
+      Object.assign(new Event(type), message === undefined ? {} : { message }),
+    );
+  return { port, postMessage, terminate, emit };
+}
+
+test("a worker that dies fails what was waiting, and what is sent after", async () => {
+  const worker = stuckWorker();
+  const onCrash = vi.fn();
+  const client = createExtractClient(worker.port, onCrash);
+  const scanning = client.scan({ text: "https://example.com/a" });
+  const loading = client.load();
+
+  worker.emit("error", "Out of memory");
+  await expect(scanning).rejects.toBeInstanceOf(WorkerError);
+  await expect(scanning).rejects.toMatchObject({
+    code: "unexpected",
+    message: "The extraction worker stopped: Out of memory",
+  });
+  await expect(loading).rejects.toMatchObject({ code: "unexpected" });
+  expect(worker.terminate).toHaveBeenCalledOnce();
+  expect(onCrash).toHaveBeenCalledOnce();
+
+  // Nothing more goes to the dead worker, and a second event changes nothing.
+  await expect(client.ping()).rejects.toMatchObject({ code: "unexpected" });
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  worker.emit("messageerror");
+  expect(onCrash).toHaveBeenCalledOnce();
+});
+
+test("a reply that can't be read fails what was waiting", async () => {
+  const worker = stuckWorker();
+  const client = createExtractClient(worker.port);
+  const pinging = client.ping();
+  worker.emit("messageerror");
+  await expect(pinging).rejects.toMatchObject({
+    code: "unexpected",
+    message: "The extraction worker stopped.",
+  });
+});
+
+test("terminate fails what was waiting, without counting as a crash", async () => {
+  const worker = stuckWorker();
+  const onCrash = vi.fn();
+  const client = createExtractClient(worker.port, onCrash);
+  const restoring = client.restore(new Blob(["{}"]));
+
+  client.terminate();
+  await expect(restoring).rejects.toMatchObject({
+    code: "unexpected",
+    message: "The extraction worker was stopped.",
+  });
+  expect(worker.terminate).toHaveBeenCalledOnce();
+  expect(onCrash).not.toHaveBeenCalled();
+});
