@@ -75,6 +75,7 @@ function fakeClient(results: Imported[] = [imported()]) {
       },
     ),
     cancel: vi.fn(),
+    discard: vi.fn(),
     terminate: vi.fn(),
     load: vi.fn(),
     deleteSource: vi.fn(),
@@ -274,6 +275,7 @@ describe("while importing", () => {
       "Import cancelled. Nothing from it was saved.",
     );
     expect(client.start).not.toHaveBeenCalled();
+    expect(client.discard).toHaveBeenCalledOnce();
   });
 
   test("a large file gets a note that it will take a while", async () => {
@@ -389,6 +391,7 @@ describe("while importing", () => {
       ),
     );
     expect(client.start).not.toHaveBeenCalled();
+    expect(client.discard).toHaveBeenCalledOnce(); // the scanned text
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

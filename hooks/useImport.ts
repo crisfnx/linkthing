@@ -93,6 +93,8 @@ export function useImport({ connect, decide = acceptScan }: Options) {
           continue;
         }
         const choice = await decide(await worker.scan(item.input, report));
+        // Not imported after all: the worker can let go of the scanned text.
+        if (choice === null || cancelled.current) worker.discard();
         if (cancelled.current) {
           throw new WorkerError("cancelled", "Cancelled before saving");
         }

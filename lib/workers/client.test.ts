@@ -123,6 +123,36 @@ test("cancel while saving rejects with 'cancelled' and leaves no rows", async ()
   expect(await db.links.count()).toBe(0);
 });
 
+test("a discarded scan is let go of: there is nothing left to start", async () => {
+  const client = createExtractClient(fakeWorker());
+  await client.scan({ text: "https://example.com/a" });
+  client.discard();
+  await expect(client.start()).rejects.toMatchObject({
+    code: "unexpected",
+    message: "There is no scanned input to import",
+  });
+});
+
+// The UI never sends a second job while one runs; the worker refuses one
+// anyway, so Cancel still reaches the first.
+test("a second job while one runs is refused, and Cancel stays with the first", async () => {
+  const db = freshDb();
+  const client = createExtractClient(fakeWorker(db));
+  await client.scan({ text: manyLinks(1200) });
+  let second: Promise<unknown> | undefined;
+  const importing = client.start({}, (p) => {
+    if (p.done === 0) second = client.reextract("any", {});
+    if (p.done === 1000) client.cancel();
+  });
+
+  await expect(importing).rejects.toMatchObject({ code: "cancelled" });
+  await expect(second).rejects.toMatchObject({
+    code: "unexpected",
+    message: "Another import or restore is still running",
+  });
+  expect(await db.links.count()).toBe(0);
+});
+
 test("load reads the library as rows", async () => {
   const client = createExtractClient(fakeWorker());
   await client.scan({ text: "https://example.com/a\nhttps://example.com/b" });

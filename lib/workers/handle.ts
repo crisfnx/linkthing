@@ -79,6 +79,13 @@ export function createHandler({
     id: number,
     task: (options: ImportOptions) => Promise<WorkerResponse>,
   ) {
+    // One job at a time (protocol.ts). The UI never sends a second, but if
+    // it did, taking over `running` would leave Cancel unable to reach the
+    // first.
+    if (running) {
+      post(unexpected(id, "Another import or restore is still running"));
+      return;
+    }
     const controller = new AbortController();
     running = controller;
     try {
@@ -109,6 +116,11 @@ export function createHandler({
         return post({ id, type: "pong" });
       case "cancel":
         running?.abort();
+        return;
+      // The scan's text can be up to 100 MB of characters: let it go when
+      // the scan won't be imported, rather than at the next scan.
+      case "discard":
+        scanned = undefined;
         return;
       // Neither goes through run(): that would make it what Cancel stops.
       case "load":

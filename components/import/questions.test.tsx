@@ -32,6 +32,7 @@ function inProcessClient(db: LinkVaultDb) {
   return {
     ping: vi.fn(),
     cancel: vi.fn(),
+    discard: vi.fn(),
     terminate: vi.fn(),
     load: vi.fn(),
     deleteSource: vi.fn(),

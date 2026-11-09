@@ -10,8 +10,11 @@ import type { ScanInput, ScanResult } from "@/lib/import/scan";
 import type { LibraryRows } from "@/lib/library/rows";
 
 // One import at a time: start imports the last scan, reextract reads a
-// stored source again (§6.4), and cancel stops whichever is running. Cancel gets no reply of its own; the
-// request it stops replies with the code "cancelled". Load reads the library
+// stored source again (§6.4), and cancel stops whichever is running. Cancel
+// gets no reply of its own; the request it stops replies with the code
+// "cancelled". A second job sent while one runs fails with "unexpected",
+// leaving the first to Cancel. Discard, also without a reply, lets go of a
+// scan that won't be imported. Load reads the library
 // as rows (§5), delete removes a source with its links (§6.4), export writes
 // links to a file and backup the library (§6.5); they can run beside an
 // import, and a cancel touches none of them. Restore runs as an import does,
@@ -27,6 +30,7 @@ export type WorkerRequest =
       choice: ReextractChoice;
     }
   | { id: number; type: "cancel" }
+  | { id: number; type: "discard" }
   | { id: number; type: "load" }
   | { id: number; type: "delete"; sourceId: string }
   | {
