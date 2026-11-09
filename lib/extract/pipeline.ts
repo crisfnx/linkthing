@@ -29,16 +29,24 @@ export interface PipelineResult {
   stats: SourceStats;
 }
 
-// Line and column of a link inside the message's text. The column counts from
-// the start of the message's line of text, after any chat header.
-function positionOf(message: Message, found: FoundUrl): Link["position"] {
-  const before = message.text.slice(0, found.index);
-  const lineBreaks = before.split("\n").length - 1;
-  return {
-    line: message.lineStart + lineBreaks,
-    column: found.index - (before.lastIndexOf("\n") + 1),
-    messageIndex: message.index,
-  };
+// Line and column of each link inside the message's text. The column counts
+// from the start of the message's line of text, after any chat header. One
+// forward walk for all of a message's links, which arrive in ascending order:
+// rescanning the text before each one made a long line quadratic.
+function positionsOf(message: Message, found: FoundUrl[]): Link["position"][] {
+  const { text } = message;
+  let line = message.lineStart;
+  let lineStart = 0; // offset where the current line begins
+  let walked = 0; // offset up to which line breaks are counted
+  return found.map(({ index }) => {
+    for (; walked < index; walked++) {
+      if (text.charCodeAt(walked) === 10 /* \n */) {
+        line++;
+        lineStart = walked + 1;
+      }
+    }
+    return { line, column: index - lineStart, messageIndex: message.index };
+  });
 }
 
 function statsOf(messages: Message[], links: Link[]): SourceStats {
@@ -143,6 +151,7 @@ export function linksFrom(
     const nearby = isLittleMoreThanLinks(note.rest, note.found)
       ? nearbyText(messages, notes, i)
       : undefined;
+    const positions = positionsOf(message, note.found);
 
     note.found.forEach((found, occurrence) => {
       const link: Link = {
@@ -150,7 +159,8 @@ export function linksFrom(
         sourceId,
         url: found.url,
         ...describeUrl(found.url, rules),
-        position: positionOf(message, found),
+        // forEach visits every index, so there is always a position.
+        position: positions[occurrence]!,
       };
       if (message.key !== undefined) link.messageKey = message.key;
       if (note.rest !== "") {

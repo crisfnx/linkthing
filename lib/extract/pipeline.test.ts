@@ -227,3 +227,27 @@ test("a 10 MB export extracts in under 2 seconds (§8.6)", () => {
   // CI machines are slower than the M-series laptop the budget is set for.
   expect(elapsed).toBeLessThan(process.env.CI ? 6000 : 2000);
 }, 30_000);
+
+// Minified JSON or HTML is one plaintext line holding every link; this guards
+// against a return to work per link proportional to the whole line.
+test("one line with 32,000 links extracts in under a second", () => {
+  const items = Array.from(
+    { length: 32_000 },
+    (_, n) => `{"u":"https://example.com/a/${n}","t":"x"}`,
+  );
+  const text = items.join(",");
+  const started = performance.now();
+  const { links } = extractLinks(text, "minified", "plaintext");
+  const elapsed = performance.now() - started;
+
+  expect(links).toHaveLength(32_000);
+  for (const n of [0, 16_000, 31_999]) {
+    expect(links[n]?.url).toBe(`https://example.com/a/${n}`);
+    expect(links[n]?.position.line).toBe(1);
+    expect(links[n]?.position.column).toBe(
+      text.indexOf(`https://example.com/a/${n}"`),
+    );
+  }
+  expect(links[0]?.position.column).toBe(6);
+  expect(elapsed).toBeLessThan(process.env.CI ? 3000 : 1000);
+}, 30_000);

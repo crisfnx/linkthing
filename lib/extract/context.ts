@@ -11,13 +11,18 @@ const NEARBY_WINDOW = 5 * 60_000;
 const PLACEHOLDER =
   /^\u{200E}?(?:<Media omitted>|<Medien ausgeschlossen>|This message was deleted|You deleted this message|Diese Nachricht wurde gelöscht\.?|(?:image|video|audio|sticker|GIF|document|Contact card) omitted|<attached: [^>]+>)$/u;
 
-// The message's text with its links taken out.
+// The message's text with its links taken out. The links are in ascending
+// order and don't overlap, so the pieces between them are joined once:
+// rebuilding the text per link made a long line quadratic.
 export function textBesideLinks(text: string, found: FoundUrl[]): string {
-  let rest = text;
-  for (const { index, length } of [...found].reverse()) {
-    rest = rest.slice(0, index) + rest.slice(index + length);
+  const pieces: string[] = [];
+  let from = 0;
+  for (const { index, length } of found) {
+    pieces.push(text.slice(from, index));
+    from = index + length;
   }
-  return rest.replace(/\s+/g, " ").trim();
+  pieces.push(text.slice(from));
+  return pieces.join("").replace(/\s+/g, " ").trim();
 }
 
 export function isLittleMoreThanLinks(rest: string, found: FoundUrl[]) {
