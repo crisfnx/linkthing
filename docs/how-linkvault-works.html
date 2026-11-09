@@ -252,7 +252,7 @@
 <main class="page">
 
   <header>
-    <p class="eyebrow">LinkVault · engine notes · October 2026</p>
+    <p class="eyebrow">LinkVault · engine notes · November 2026</p>
     <h1>How LinkVault works</h1>
     <p class="lede">LinkVault reads a chat export, finds every link in it, and turns them into a list you can search as you type, even at 100,000 links. All of it runs in your browser and nothing is uploaded. This page follows one link from the text to the screen, and shows why each step stays fast.</p>
     <p class="journey" aria-label="The path a link takes">
@@ -290,6 +290,7 @@
     <div class="prose">
       <p>A browser page has one main thread. It draws the screen and answers clicks and key presses. If it spends a second parsing a chat, the page freezes for that second. So LinkVault does all heavy work in a Web Worker, a second thread with no access to the screen. The two talk by sending each other messages.</p>
       <p>Everything is stored in the browser's own database, IndexedDB, through a library called Dexie. The worker writes the links there and reads them back. The page reads only the small tables itself: sources, stars and settings. That is why a star shows the moment you press <code>s</code>.</p>
+      <p>If the worker stops with an error, whatever was waiting on it fails with a message and a Try again button, and the next request starts a new worker.</p>
     </div>
     <figure>
       <div class="scroll">
@@ -356,7 +357,7 @@
     </div>
     <figure>
       <div class="scroll">
-        <svg class="d" viewBox="0 0 940 184" role="img" aria-label="Seven steps: unzip and decode, split into messages, and find links with one regex scan every character in native code. Trimming, checking and cleaning run once per candidate. Saving to IndexedDB is the slow part: 4.4 of 5.3 seconds.">
+        <svg class="d" viewBox="0 0 940 184" role="img" aria-label="Seven steps: unzip and decode, split into messages, and find links with one regex scan every character in native code. Trimming, checking and cleaning run once per candidate. Saving to IndexedDB is the slow part: 3.65 of 5.0 seconds.">
           <defs>
             <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="fi"/></marker>
           </defs>
@@ -399,7 +400,7 @@
           <text class="m sm" x="76" y="166" text-anchor="middle">10 MB of text</text>
           <text class="m sm" x="210" y="166" text-anchor="middle">130,000 messages</text>
           <text class="m sm" x="746" y="166" text-anchor="middle">97,897 links</text>
-          <text class="m sm" x="880" y="166" text-anchor="middle">4.4 s of 5.3 s</text>
+          <text class="m sm" x="880" y="166" text-anchor="middle">3.65 s of 5.0 s</text>
         </svg>
       </div>
       <figcaption>The first three steps touch every character, and the browser runs them in its own native code: text decoding, line splitting and regular expressions. Parsing a URL and looking up the public suffix list cost far more, so they run once per candidate. The numbers come from a 10 MB test export.</figcaption>
@@ -413,34 +414,33 @@
       <h3>One regular expression</h3>
       <p>Each message's text goes through one regular expression (<code>lib/extract/url/find.ts</code>). It matches anything that starts like a link: <code>https://</code> or <code>http://</code>, <code>www.</code>, or a bare domain like <code>github.com/vercel/next.js</code>. A match runs until it reaches a character a link can't contain: a space, a quote, an angle bracket, an emoji, an invisible formatting character, or Chinese and Japanese punctuation.</p>
       <p>The expression is built once. The browser's regex engine is native code and walks the text in a single pass, so the scan itself costs little. Most of the work after it happens on a handful of candidates per message.</p>
+      <p>A minified JSON or HTML file is the opposite case: one line, so one message, holding every link. Each link's position and the text around it come from a single forward walk over the message, so the work per link doesn't grow with the length of the line. A line with 32,000 links takes about a tenth of a second.</p>
     </div>
 
     <figure>
       <div class="scroll narrow">
-        <svg class="d" viewBox="0 0 940 108" role="img" aria-label="Importing the 10 MB test export takes 5.3 seconds: 0.9 seconds to read, parse and find links, and 4.4 seconds to save them to IndexedDB.">
-          <text class="m sm" x="40" y="24">read, parse, find links</text>
-          <rect class="bar-a" x="40" y="34" width="135.8" height="30"/>
-          <text class="on-acc" x="107.9" y="54" text-anchor="middle">0.9 s</text>
-          <rect class="bar-b" x="175.8" y="34" width="664.2" height="30"/>
-          <text x="190" y="54">save to IndexedDB: 4.4 s</text>
+        <svg class="d" viewBox="0 0 940 108" role="img" aria-label="Importing the 10 MB test export takes 5.0 seconds: 1.4 seconds to read, parse, find links and show the result, and 3.65 seconds to save them to IndexedDB.">
+          <text class="m sm" x="40" y="24">read, parse, find links, show the result</text>
+          <rect class="bar-a" x="40" y="34" width="220.6" height="30"/>
+          <text class="on-acc" x="150.3" y="54" text-anchor="middle">1.4 s</text>
+          <rect class="bar-b" x="260.6" y="34" width="579.4" height="30"/>
+          <text x="275" y="54">save to IndexedDB: 3.65 s</text>
           <line class="ln-m" x1="40" y1="74" x2="840" y2="74"/>
           <line class="ln-m" x1="40" y1="74" x2="40" y2="79"/>
-          <line class="ln-m" x1="190.9" y1="74" x2="190.9" y2="79"/>
-          <line class="ln-m" x1="341.9" y1="74" x2="341.9" y2="79"/>
-          <line class="ln-m" x1="492.8" y1="74" x2="492.8" y2="79"/>
-          <line class="ln-m" x1="643.8" y1="74" x2="643.8" y2="79"/>
-          <line class="ln-m" x1="794.7" y1="74" x2="794.7" y2="79"/>
-          <line class="ln-m" x1="840" y1="74" x2="840" y2="79"/>
+          <line class="ln-m" x1="198.7" y1="74" x2="198.7" y2="79"/>
+          <line class="ln-m" x1="357.5" y1="74" x2="357.5" y2="79"/>
+          <line class="ln-m" x1="516.2" y1="74" x2="516.2" y2="79"/>
+          <line class="ln-m" x1="674.9" y1="74" x2="674.9" y2="79"/>
+          <line class="ln-m" x1="833.7" y1="74" x2="833.7" y2="79"/>
           <text class="m sm" x="40" y="94" text-anchor="middle">0 s</text>
-          <text class="m sm" x="190.9" y="94" text-anchor="middle">1 s</text>
-          <text class="m sm" x="341.9" y="94" text-anchor="middle">2 s</text>
-          <text class="m sm" x="492.8" y="94" text-anchor="middle">3 s</text>
-          <text class="m sm" x="643.8" y="94" text-anchor="middle">4 s</text>
-          <text class="m sm" x="794.7" y="94" text-anchor="middle">5 s</text>
-          <text class="sm t" x="840" y="94" text-anchor="middle">5.3 s</text>
+          <text class="m sm" x="198.7" y="94" text-anchor="middle">1 s</text>
+          <text class="m sm" x="357.5" y="94" text-anchor="middle">2 s</text>
+          <text class="m sm" x="516.2" y="94" text-anchor="middle">3 s</text>
+          <text class="m sm" x="674.9" y="94" text-anchor="middle">4 s</text>
+          <text class="sm t" x="833.7" y="94" text-anchor="middle">5 s</text>
         </svg>
       </div>
-      <figcaption>Where an import's time goes: the 10 MB test export, 97,897 links, in Chrome, drawn to scale. Saving is the slow part, because IndexedDB charges for every record, at about 22,000 links a second. Throughout, the page never paused for more than 42 ms.</figcaption>
+      <figcaption>Where an import's time goes, from choosing the file to the summary on screen: the 10 MB test export, 97,897 links, in Chrome, drawn to scale. Saving is the slow part, because IndexedDB charges for every record, at about 27,000 links a second. Throughout, the page never paused for more than 42 ms.</figcaption>
     </figure>
 
     <div class="prose">
@@ -513,7 +513,7 @@
       <p>The same list decides which site a link is grouped under. <code>m.youtube.com</code> and <code>news.bbc.co.uk</code> group as youtube.com and bbc.co.uk, while <code>alice.github.io</code> stays a site of its own.</p>
 
       <h3>Saving</h3>
-      <p>The links are written in one database transaction, a thousand at a time, with progress shown. If you cancel, close the tab or run out of disk, nothing is half-saved. The original text is kept, compressed, so a source can be read again when the parser improves.</p>
+      <p>The links are written in one database transaction, a thousand at a time, with progress shown. Each link is indexed only by its id and its source: an index nothing read was dropped in November 2026, which took about 0.6 s off this import. If you cancel, close the tab or run out of disk, nothing is half-saved. The original text is kept, compressed, so a source can be read again when the parser improves.</p>
     </div>
   </section>
 
@@ -778,7 +778,7 @@
       <h2>Measured</h2>
     </div>
     <div class="prose">
-      <p>Measured on production builds during milestones M1 to M5, with test libraries of 50,000 and 98,000 links. The budgets are the PRD's.</p>
+      <p>Measured on production builds during milestones M1 to M5, with test libraries of 50,000 and 98,000 links. The Chrome import was measured again in November 2026, on a profile kept on disk, after the unused index was dropped; the Safari figure is from before that. The budgets are the PRD's.</p>
     </div>
     <div class="table-wrap">
       <table>
@@ -787,7 +787,8 @@
         </thead>
         <tbody>
           <tr><td>Find the links in a 10 MB export</td><td class="num">98,000</td><td class="num">about 0.8 s</td><td class="num">–</td></tr>
-          <tr><td>Whole import, saving included, in Chrome</td><td class="num">98,000</td><td class="num">5.3 s</td><td class="num">6 s</td></tr>
+          <tr><td>Find 32,000 links on one line (minified JSON)</td><td class="num">32,000</td><td class="num">about 0.1 s</td><td class="num">–</td></tr>
+          <tr><td>Whole import, saving included, in Chrome</td><td class="num">98,000</td><td class="num">5.0 s</td><td class="num">6 s</td></tr>
           <tr><td>The same import in Safari</td><td class="num">98,000</td><td class="num">3.5 s</td><td class="num">6 s</td></tr>
           <tr><td>Longest pause on the page during that import</td><td class="num">98,000</td><td class="num">42 ms</td><td class="num">50 ms</td></tr>
           <tr><td>List on screen after a reload</td><td class="num">98,000</td><td class="num">0.9 s</td><td class="num">–</td></tr>
@@ -807,7 +808,7 @@
     </div>
     <div class="prose">
       <ul class="limits">
-        <li><strong>Saving is the slowest step.</strong> IndexedDB charges for every record, about 22,000 links a second. Packing links into blocks would save faster, but search, stars and re-extract are built on one record per link, so faster saving is left for later.</li>
+        <li><strong>Saving is the slowest step.</strong> IndexedDB charges for every record, about 27,000 links a second in Chrome. Packing links into blocks would save faster, but search, stars and re-extract are built on one record per link, so faster saving is left for later.</li>
         <li><strong>The list has a height ceiling.</strong> Browsers cap how tall an element can be. At 50 px a row, the list can reach about 360,000 links in Firefox and 670,000 in Chrome and Safari. Past that, rows would need scaled positions.</li>
         <li><strong>Search is a straight scan.</strong> At 100,000 links it stays well inside its budget. Beyond that, the PRD plans a proper search index (MiniSearch).</li>
       </ul>
@@ -815,7 +816,7 @@
   </section>
 
   <footer>
-    Written from the linkthing code and the PRD (v2.36), 27 October 2026. The main files: <code>lib/extract/</code>, <code>lib/workers/</code>, <code>lib/library/rows.ts</code>, <code>lib/query/view.ts</code> and <code>components/library/LinkList.tsx</code>.
+    Written from the linkthing code and the PRD (v2.36), 27 October 2026; updated for v2.37, 9 November 2026. The main files: <code>lib/extract/</code>, <code>lib/workers/</code>, <code>lib/library/rows.ts</code>, <code>lib/query/view.ts</code> and <code>components/library/LinkList.tsx</code>.
   </footer>
 
 </main>
