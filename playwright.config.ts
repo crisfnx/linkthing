@@ -3,6 +3,11 @@ import { defineConfig, devices } from "@playwright/test";
 // End-to-end tests (PRD §8.5): the production build in a real browser,
 // desktop and phone. Locally they use the installed Google Chrome, so nothing
 // is downloaded; CI installs Playwright's Chromium.
+//
+// Not for timing IndexedDB: each test's context is incognito-like, so the
+// database lives in memory, and saving a 10 MB import measured about twice
+// as fast as on disk (1.9 s against 4.2 s). Time it with
+// chromium.launchPersistentContext and a profile directory instead.
 const PORT = 3200; // not 3000/3001, where a dev server may be running
 const chrome = process.env.CI ? {} : { channel: "chrome" as const };
 

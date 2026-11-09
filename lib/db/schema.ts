@@ -60,6 +60,12 @@ export function createDb(
         }),
     );
 
+  // v3: no urlKey index on links. Nothing queries links by urlKey (stars and
+  // tags are kept by it in annotations), and it was one index write in three
+  // per link: without it a 10 MB import saved in 3.65 s instead of 4.2 s in
+  // Chrome. Add it back when something reads it.
+  db.version(3).stores({ links: "id, sourceId" });
+
   // When another tab opens a newer schema, Dexie closes this connection so the
   // upgrade isn't blocked. This tab's code still knows only the old schema, so
   // it has to reload (§8.2).

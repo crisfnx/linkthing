@@ -40,7 +40,7 @@ Chats and notes make good "save for later" bins and bad libraries. The links are
 - **Asks only when it has to.** A file imported before, a newer export of a chat you have, a file that might or might not be a chat, or dates that read either way (`06/08/2022`: 6 August or 8 June?) open one short dialog. Everything else imports straight away.
 - **Progress you can cancel.** Each phase is shown and announced to screen readers. Cancelling, or closing the tab, leaves nothing half-saved: each import is one database transaction.
 - **A summary of what came out:** links, unique links, sites and dates, then the list of your sources.
-- **Big files are fine.** A 10 MB export takes three to five seconds (Safari is the quicker), and the page stays responsive throughout. Files up to 100 MB are accepted, with a note above 25 MB that it will take a while.
+- **Big files are fine.** A 10 MB export (about 100,000 links) takes about five seconds in Chrome on a recent Mac, most of it spent saving (Safari is the quicker), and the page stays responsive throughout. Files up to 100 MB are accepted, with a note above 25 MB that it will take a while.
 
 ### Built: browsing
 

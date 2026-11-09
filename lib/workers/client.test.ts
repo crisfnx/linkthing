@@ -139,14 +139,20 @@ test("a second job while one runs is refused, and Cancel stays with the first", 
   const db = freshDb();
   const client = createExtractClient(fakeWorker(db));
   await client.scan({ text: manyLinks(1200) });
+  // Caught where it's made: it fails while the import is still running, and
+  // left unhandled until then it would be reported as an unhandled rejection.
   let second: Promise<unknown> | undefined;
   const importing = client.start({}, (p) => {
-    if (p.done === 0) second = client.reextract("any", {});
+    if (p.done === 0) {
+      second = client.reextract("any", {}).catch((error: unknown) => error);
+    }
     if (p.done === 1000) client.cancel();
   });
 
   await expect(importing).rejects.toMatchObject({ code: "cancelled" });
-  await expect(second).rejects.toMatchObject({
+  const refused = await second;
+  expect(refused).toBeInstanceOf(WorkerError);
+  expect(refused).toMatchObject({
     code: "unexpected",
     message: "Another import or restore is still running",
   });

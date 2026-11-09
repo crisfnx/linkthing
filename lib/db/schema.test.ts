@@ -174,7 +174,10 @@ describe("the schema", () => {
     await db.tags.put(tag);
 
     expect(await db.links.where("sourceId").equals(source.id).count()).toBe(1);
-    expect(await db.links.where("urlKey").equals(link.urlKey).count()).toBe(1);
+    // Not indexed since v3: nothing looks links up by it.
+    await expect(
+      db.links.where("urlKey").equals(link.urlKey).count(),
+    ).rejects.toThrow(/not indexed/);
     expect(await db.annotations.where("tags").equals(tag.id).count()).toBe(1);
     await expect(db.tags.add({ ...tag, id: "tag-2" })).rejects.toThrow();
   });
@@ -207,6 +210,26 @@ describe("schema v2", () => {
   });
 });
 
+describe("schema v3", () => {
+  test("drops the urlKey index on links and keeps every link", async () => {
+    const name = `test-${crypto.randomUUID()}`;
+    const v2 = new Dexie(name);
+    v2.version(2).stores({ links: "id, sourceId, urlKey" });
+    await v2.table("links").bulkPut([link, { ...link, id: "link-2" }]);
+    v2.close();
+
+    const db = createDb(name);
+    opened.push(db);
+    await db.open();
+    const store = db.backendDB().transaction("links").objectStore("links");
+    expect([...store.indexNames]).toEqual(["sourceId"]);
+    expect(await db.links.where("sourceId").equals(link.sourceId).count()).toBe(
+      2,
+    );
+    expect(await db.links.get(link.id)).toEqual(link);
+  });
+});
+
 describe("an upgrade from another tab", () => {
   test("closes this connection and asks for a reload", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -215,7 +238,7 @@ describe("an upgrade from another tab", () => {
     await db.open();
 
     const newerTab = new Dexie(db.name);
-    newerTab.version(3).stores({ sources: "id, importedAt, updatedAt" });
+    newerTab.version(4).stores({ sources: "id, importedAt, updatedAt" });
     await newerTab.open();
     newerTab.close();
 
