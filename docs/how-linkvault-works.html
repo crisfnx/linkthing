@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- A copy of the page published at https://claude.ai/artifact/QXPVY8cNG8q1zGiHZX71MC. Opens in any browser; when one changes, update the other. -->
+<title>How LinkVault Works</title>
+<style>
+  :root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=JetBrains+Mono:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+  /* Layout: one reading column that follows a link from the text to the screen; figures break wider than the prose. */
+  :root {
+    --bg: #f4f6f9;
+    --surface: #ffffff;
+    --ink: #14171d;
+    --muted: #586070;
+    --rule: #dce1e8;
+    --line: #9aa3b2;
+    --accent: #2347c8;
+    --accent-soft: #e5ebfb;
+    --on-accent: #ffffff;
+    --mark: #fde68a;
+    --cut: #b42318;
+    --add: #17784c;
+    --bar: #c6ccd6;
+    --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115;
+      --surface: #161a20;
+      --ink: #e6e9ee;
+      --muted: #9ba2af;
+      --rule: #2a2f39;
+      --line: #4d5464;
+      --accent: #8eaaff;
+      --accent-soft: #1b2440;
+      --on-accent: #0c1022;
+      --mark: #5c4b0e;
+      --cut: #ff8a7c;
+      --add: #62d39a;
+      --bar: #3a404c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --surface: #161a20;
+    --ink: #e6e9ee;
+    --muted: #9ba2af;
+    --rule: #2a2f39;
+    --line: #4d5464;
+    --accent: #8eaaff;
+    --accent-soft: #1b2440;
+    --on-accent: #0c1022;
+    --mark: #5c4b0e;
+    --cut: #ff8a7c;
+    --add: #62d39a;
+    --bar: #3a404c;
+    color-scheme: dark;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.65 var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding-block: 56px 88px;
+    display: flex;
+    flex-direction: column;
+    gap: 76px;
+  }
+
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.3rem, 6vw, 3.6rem); line-height: 1.02; letter-spacing: -0.025em; font-weight: 700; }
+  h2 { font-size: clamp(1.55rem, 3.2vw, 2rem); line-height: 1.15; letter-spacing: -0.015em; font-weight: 700; }
+  h3 { font-size: 1.2rem; line-height: 1.3; font-weight: 600; margin-top: 14px; }
+  p { margin: 0; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.84em; }
+  code {
+    background: color-mix(in srgb, var(--rule) 60%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .eyebrow {
+    font: 600 12px/1.4 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .eyebrow code { background: none; padding: 0; font-size: 1em; text-transform: none; letter-spacing: 0.02em; color: var(--accent); }
+
+  .prose { max-width: 680px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  /* Header */
+  header { display: flex; flex-direction: column; gap: 18px; }
+  .lede { font-size: 1.2rem; line-height: 1.55; max-width: 640px; }
+  .journey {
+    font: 13px/1.7 var(--mono);
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+  .journey span:not(:last-child)::after { content: "\2192"; margin-left: 10px; color: var(--line); }
+
+  .glance {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 28px;
+    margin-top: 10px;
+  }
+  .glance a {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 14px;
+    border-top: 2px solid var(--ink);
+    color: inherit;
+    text-decoration: none;
+  }
+  .glance .gl { font: 600 11.5px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .glance .gt { font: 600 1.08rem/1.3 var(--display); }
+  .glance .gb { font-size: 15px; line-height: 1.5; color: var(--muted); }
+  .glance a:hover .gt { color: var(--accent); }
+
+  section { display: flex; flex-direction: column; gap: 20px; scroll-margin-top: 24px; }
+  .head { display: flex; flex-direction: column; gap: 8px; }
+
+  /* Figures */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .scroll {
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .scroll svg { display: block; width: 100%; height: auto; min-width: 720px; }
+  .scroll.narrow svg { min-width: 560px; }
+  figcaption { font-size: 15px; line-height: 1.55; color: var(--muted); max-width: 680px; }
+
+  .d { font-family: var(--mono); color: var(--ink); }
+  .d text { fill: currentColor; font-size: 12.5px; }
+  .d .sm { font-size: 11.5px; }
+  .d .t { font-weight: 600; }
+  .d .m { fill: var(--muted); }
+  .d .acc-t { fill: var(--accent); }
+  .d .hit { fill: var(--accent); font-weight: 700; }
+  .d .on-acc { fill: var(--on-accent); font-weight: 600; }
+  .d .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.25; }
+  .d .box.acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.75; }
+  .d .box.dashed { stroke-dasharray: 5 4; }
+  .d .sep { fill: var(--rule); stroke: var(--line); stroke-width: 1.25; }
+  .d .ln { fill: none; stroke: currentColor; stroke-width: 1.4; }
+  .d .ln-m { fill: none; stroke: var(--line); stroke-width: 1.25; }
+  .d .ln-acc { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+  .d .dash { stroke-dasharray: 4 4; }
+  .d .rule-l { stroke: var(--rule); stroke-width: 1; }
+  .d .fi { fill: currentColor; }
+  .d .fa { fill: var(--accent); }
+  .d .bar-a { fill: var(--accent); }
+  .d .bar-b { fill: var(--bar); }
+
+  /* The worked example */
+  .chat {
+    font: 14px/1.6 var(--mono);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-wrap: anywhere;
+  }
+  .chat .ts { color: var(--muted); }
+  .chat .who { color: var(--accent); font-weight: 600; }
+
+  .steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .steps li {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 4px 20px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .steps .k { font: 600 12px/1.6 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); padding-top: 3px; }
+  .steps .v { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .steps .v p { font-size: 16px; line-height: 1.55; }
+  .url { font: 14px/1.55 var(--mono); overflow-wrap: anywhere; }
+  del { color: var(--cut); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+  mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 15.5px; line-height: 1.45; }
+  th {
+    text-align: left;
+    font: 600 11.5px/1.4 var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 16px 10px 0;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+  td { padding: 11px 16px 11px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td:last-child, th:last-child { padding-right: 0; }
+  .num { font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill { font: 600 11.5px/1 var(--mono); padding: 4px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+  .kept { color: var(--add); background: color-mix(in srgb, var(--add) 13%, transparent); }
+  .skipped { color: var(--cut); background: color-mix(in srgb, var(--cut) 12%, transparent); }
+
+  ul.limits { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 10px; }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 18px; font-size: 14.5px; color: var(--muted); max-width: 680px; }
+
+  @media (max-width: 560px) {
+    body { font-size: 16.5px; }
+    .page { gap: 60px; padding-block: 36px 64px; }
+    .steps li { grid-template-columns: 1fr; }
+    .scroll { padding: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<main class="page">
+
+  <header>
+    <p class="eyebrow">LinkVault · engine notes · October 2026</p>
+    <h1>How LinkVault works</h1>
+    <p class="lede">LinkVault reads a chat export, finds every link in it, and turns them into a list you can search as you type, even at 100,000 links. All of it runs in your browser and nothing is uploaded. This page follows one link from the text to the screen, and shows why each step stays fast.</p>
+    <p class="journey" aria-label="The path a link takes">
+      <span>chat export</span><span>Web Worker</span><span>IndexedDB</span><span>lean rows</span><span>search</span><span>28 rows on screen</span>
+    </p>
+    <nav class="glance" aria-label="On this page">
+      <a href="#threads">
+        <span class="gl">Threads</span>
+        <span class="gt">Heavy work runs off the page</span>
+        <span class="gb">A Web Worker reads, parses and saves, so the page never freezes.</span>
+      </a>
+      <a href="#extract">
+        <span class="gl">Extraction</span>
+        <span class="gt">One pass finds the links</span>
+        <span class="gb">A single regular expression finds candidates. The costly checks run only on those.</span>
+      </a>
+      <a href="#rows">
+        <span class="gl">Hand-off</span>
+        <span class="gt">Packed into columns</span>
+        <span class="gb">The library reaches the page as a dozen arrays, handed over rather than copied.</span>
+      </a>
+      <a href="#list">
+        <span class="gl">Display</span>
+        <span class="gt">Only visible rows exist</span>
+        <span class="gb">Search is a few loops over arrays, and the list draws about 28 rows at a time.</span>
+      </a>
+    </nav>
+  </header>
+
+  <section id="threads">
+    <div class="head">
+      <p class="eyebrow"><code>lib/workers/</code></p>
+      <h2>Two threads and a database</h2>
+    </div>
+    <div class="prose">
+      <p>A browser page has one main thread. It draws the screen and answers clicks and key presses. If it spends a second parsing a chat, the page freezes for that second. So LinkVault does all heavy work in a Web Worker, a second thread with no access to the screen. The two talk by sending each other messages.</p>
+      <p>Everything is stored in the browser's own database, IndexedDB, through a library called Dexie. The worker writes the links there and reads them back. The page reads only the small tables itself: sources, stars and settings. That is why a star shows the moment you press <code>s</code>.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="d" viewBox="0 0 940 300" role="img" aria-label="The page sends a file to the Web Worker. The worker writes links to IndexedDB in one transaction, reads them back 10,000 at a time, and hands lean rows to the page. The page reads and writes stars, sources and settings in IndexedDB directly.">
+          <defs>
+            <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="fi"/></marker>
+          </defs>
+          <rect class="box" x="20" y="30" width="220" height="190" rx="8"/>
+          <text class="t" x="36" y="58">Page</text>
+          <text class="m" x="36" y="78">main thread</text>
+          <text x="36" y="110">search, filters</text>
+          <text x="36" y="132">facet counts</text>
+          <text x="36" y="154">virtual list</text>
+          <text x="36" y="176">details drawer</text>
+
+          <rect class="box acc" x="380" y="30" width="220" height="190" rx="8"/>
+          <text class="t" x="396" y="58">Web Worker</text>
+          <text class="m" x="396" y="78">background thread</text>
+          <text x="396" y="110">unzip, decode</text>
+          <text x="396" y="132">split into messages</text>
+          <text x="396" y="154">find, clean links</text>
+          <text x="396" y="176">build lean rows</text>
+
+          <rect class="box" x="740" y="30" width="180" height="190" rx="8"/>
+          <text class="t" x="756" y="58">IndexedDB</text>
+          <text class="m" x="756" y="78">via Dexie</text>
+          <text x="756" y="110">sources</text>
+          <text x="756" y="132">sourceParts</text>
+          <text x="756" y="154">links</text>
+          <text x="756" y="176">annotations</text>
+          <text x="756" y="198">settings</text>
+
+          <line class="ln" x1="246" y1="104" x2="372" y2="104" marker-end="url(#m1)"/>
+          <text class="sm" x="309" y="80" text-anchor="middle">a file or</text>
+          <text class="sm" x="309" y="94" text-anchor="middle">pasted text</text>
+
+          <line class="ln" x1="374" y1="176" x2="248" y2="176" marker-end="url(#m1)"/>
+          <text class="sm" x="309" y="152" text-anchor="middle">lean rows</text>
+          <text class="sm" x="309" y="166" text-anchor="middle">(transferred)</text>
+
+          <line class="ln" x1="606" y1="104" x2="732" y2="104" marker-end="url(#m1)"/>
+          <text class="sm" x="669" y="80" text-anchor="middle">writes links,</text>
+          <text class="sm" x="669" y="94" text-anchor="middle">one transaction</text>
+
+          <line class="ln" x1="734" y1="176" x2="608" y2="176" marker-end="url(#m1)"/>
+          <text class="sm" x="669" y="152" text-anchor="middle">reads links,</text>
+          <text class="sm" x="669" y="166" text-anchor="middle">10,000 at a time</text>
+
+          <path class="ln" d="M130 226 V258 H830 V226" marker-start="url(#m1)" marker-end="url(#m1)"/>
+          <text class="sm" x="480" y="282" text-anchor="middle">stars, sources, settings: small tables the page reads and writes itself</text>
+        </svg>
+      </div>
+      <figcaption>The worker does the heavy lifting: files in, links saved, rows packed for the page. The page searches, counts and draws. When a source changes, from this tab or another, the page asks the worker for fresh rows, and the old ones stay on screen until they arrive.</figcaption>
+    </figure>
+  </section>
+
+  <section id="extract">
+    <div class="head">
+      <p class="eyebrow"><code>lib/extract/</code></p>
+      <h2>Finding the links</h2>
+    </div>
+    <div class="prose">
+      <p>An import goes through the same steps every time. The first three read the whole text. The rest run only on the bits of text that look like links, which are a tiny share of it.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="d" viewBox="0 0 940 184" role="img" aria-label="Seven steps: unzip and decode, split into messages, and find links with one regex scan every character in native code. Trimming, checking and cleaning run once per candidate. Saving to IndexedDB is the slow part: 4.4 of 5.3 seconds.">
+          <defs>
+            <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="fi"/></marker>
+          </defs>
+          <path class="ln-m" d="M20 64 V56 H400 V64"/>
+          <text class="m sm" x="210" y="44" text-anchor="middle">scans every character, in native code</text>
+          <path class="ln-m" d="M422 64 V56 H802 V64"/>
+          <text class="m sm" x="612" y="44" text-anchor="middle">runs once per candidate</text>
+          <path class="ln-m" d="M824 64 V56 H936 V64"/>
+          <text class="m sm" x="880" y="44" text-anchor="middle">the slow part</text>
+
+          <rect class="box" x="20" y="76" width="112" height="64" rx="6"/>
+          <text x="76" y="103" text-anchor="middle">Unzip,</text>
+          <text x="76" y="121" text-anchor="middle">decode</text>
+          <rect class="box" x="154" y="76" width="112" height="64" rx="6"/>
+          <text x="210" y="103" text-anchor="middle">Split into</text>
+          <text x="210" y="121" text-anchor="middle">messages</text>
+          <rect class="box acc" x="288" y="76" width="112" height="64" rx="6"/>
+          <text x="344" y="103" text-anchor="middle">Find links:</text>
+          <text x="344" y="121" text-anchor="middle">one regex</text>
+          <rect class="box" x="422" y="76" width="112" height="64" rx="6"/>
+          <text x="478" y="103" text-anchor="middle">Trim ends,</text>
+          <text x="478" y="121" text-anchor="middle">unescape</text>
+          <rect class="box" x="556" y="76" width="112" height="64" rx="6"/>
+          <text x="612" y="103" text-anchor="middle">Check URL,</text>
+          <text x="612" y="121" text-anchor="middle">suffix list</text>
+          <rect class="box" x="690" y="76" width="112" height="64" rx="6"/>
+          <text x="746" y="103" text-anchor="middle">Clean, key,</text>
+          <text x="746" y="121" text-anchor="middle">site, kind</text>
+          <rect class="box" x="824" y="76" width="112" height="64" rx="6"/>
+          <text x="880" y="103" text-anchor="middle">Save to</text>
+          <text x="880" y="121" text-anchor="middle">IndexedDB</text>
+
+          <line class="ln" x1="135" y1="108" x2="151" y2="108" marker-end="url(#m2)"/>
+          <line class="ln" x1="269" y1="108" x2="285" y2="108" marker-end="url(#m2)"/>
+          <line class="ln" x1="403" y1="108" x2="419" y2="108" marker-end="url(#m2)"/>
+          <line class="ln" x1="537" y1="108" x2="553" y2="108" marker-end="url(#m2)"/>
+          <line class="ln" x1="671" y1="108" x2="687" y2="108" marker-end="url(#m2)"/>
+          <line class="ln" x1="805" y1="108" x2="821" y2="108" marker-end="url(#m2)"/>
+
+          <text class="m sm" x="76" y="166" text-anchor="middle">10 MB of text</text>
+          <text class="m sm" x="210" y="166" text-anchor="middle">130,000 messages</text>
+          <text class="m sm" x="746" y="166" text-anchor="middle">97,897 links</text>
+          <text class="m sm" x="880" y="166" text-anchor="middle">4.4 s of 5.3 s</text>
+        </svg>
+      </div>
+      <figcaption>The first three steps touch every character, and the browser runs them in its own native code: text decoding, line splitting and regular expressions. Parsing a URL and looking up the public suffix list cost far more, so they run once per candidate. The numbers come from a 10 MB test export.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h3>Splitting a chat into messages</h3>
+      <p>LinkVault first works out what kind of text it has. If at least 60% of the first 50 lines look like WhatsApp headers, such as <code>14/03/2026, 21:03 - Sam:</code>, it reads the file as a WhatsApp chat. Between 20% and 60% it asks you. Otherwise each line is its own message.</p>
+      <p>A line without a header belongs to the message above it, so a message can span several lines. Whether dates are day-first or month-first is settled by reading every date in the file first: a first number above 12 can only be a day. Each message gets a fingerprint made from its minute, sender and text. A newer export of the same chat gives the same fingerprints, so updating a chat adds only the new links.</p>
+
+      <h3>One regular expression</h3>
+      <p>Each message's text goes through one regular expression (<code>lib/extract/url/find.ts</code>). It matches anything that starts like a link: <code>https://</code> or <code>http://</code>, <code>www.</code>, or a bare domain like <code>github.com/vercel/next.js</code>. A match runs until it reaches a character a link can't contain: a space, a quote, an angle bracket, an emoji, an invisible formatting character, or Chinese and Japanese punctuation.</p>
+      <p>The expression is built once. The browser's regex engine is native code and walks the text in a single pass, so the scan itself costs little. Most of the work after it happens on a handful of candidates per message.</p>
+    </div>
+
+    <figure>
+      <div class="scroll narrow">
+        <svg class="d" viewBox="0 0 940 108" role="img" aria-label="Importing the 10 MB test export takes 5.3 seconds: 0.9 seconds to read, parse and find links, and 4.4 seconds to save them to IndexedDB.">
+          <text class="m sm" x="40" y="24">read, parse, find links</text>
+          <rect class="bar-a" x="40" y="34" width="135.8" height="30"/>
+          <text class="on-acc" x="107.9" y="54" text-anchor="middle">0.9 s</text>
+          <rect class="bar-b" x="175.8" y="34" width="664.2" height="30"/>
+          <text x="190" y="54">save to IndexedDB: 4.4 s</text>
+          <line class="ln-m" x1="40" y1="74" x2="840" y2="74"/>
+          <line class="ln-m" x1="40" y1="74" x2="40" y2="79"/>
+          <line class="ln-m" x1="190.9" y1="74" x2="190.9" y2="79"/>
+          <line class="ln-m" x1="341.9" y1="74" x2="341.9" y2="79"/>
+          <line class="ln-m" x1="492.8" y1="74" x2="492.8" y2="79"/>
+          <line class="ln-m" x1="643.8" y1="74" x2="643.8" y2="79"/>
+          <line class="ln-m" x1="794.7" y1="74" x2="794.7" y2="79"/>
+          <line class="ln-m" x1="840" y1="74" x2="840" y2="79"/>
+          <text class="m sm" x="40" y="94" text-anchor="middle">0 s</text>
+          <text class="m sm" x="190.9" y="94" text-anchor="middle">1 s</text>
+          <text class="m sm" x="341.9" y="94" text-anchor="middle">2 s</text>
+          <text class="m sm" x="492.8" y="94" text-anchor="middle">3 s</text>
+          <text class="m sm" x="643.8" y="94" text-anchor="middle">4 s</text>
+          <text class="m sm" x="794.7" y="94" text-anchor="middle">5 s</text>
+          <text class="sm t" x="840" y="94" text-anchor="middle">5.3 s</text>
+        </svg>
+      </div>
+      <figcaption>Where an import's time goes: the 10 MB test export, 97,897 links, in Chrome, drawn to scale. Saving is the slow part, because IndexedDB charges for every record, at about 22,000 links a second. Throughout, the page never paused for more than 42 ms.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h3>One link, step by step</h3>
+      <p>Here is one line from a chat, and what happens to the link in it.</p>
+    </div>
+    <p class="chat"><span class="ts">14/03/2026, 21:03 - </span><span class="who">Sam:</span> the tram video I mentioned (https://www.youtube.com/watch?v=abc123&amp;si=XYZ).</p>
+    <ol class="steps">
+      <li>
+        <span class="k">Find</span>
+        <div class="v">
+          <span class="url">the tram video I mentioned (<mark>https://www.youtube.com/watch?v=abc123&amp;si=XYZ).</mark></span>
+          <p>The match runs to the end of the line, since brackets and full stops can appear inside real links.</p>
+        </div>
+      </li>
+      <li>
+        <span class="k">Trim</span>
+        <div class="v">
+          <span class="url">https://www.youtube.com/watch?v=abc123&amp;si=XYZ<del>).</del></span>
+          <p>The full stop ends the sentence, and the bracket has no partner inside the link, so both go.</p>
+        </div>
+      </li>
+      <li>
+        <span class="k">Check</span>
+        <div class="v">
+          <p>The browser's URL parser accepts it, it is <code>https</code>, and the host has a dot. Code pasted into a chat, like <code>https://api.example.com/users/${id}</code>, is turned away here.</p>
+        </div>
+      </li>
+      <li>
+        <span class="k">Clean</span>
+        <div class="v">
+          <span class="url">https://www.youtube.com/watch?v=abc123<del>&amp;si=XYZ</del></span>
+          <p><code>si</code> is YouTube's share tracking. This cleaned URL is the one you see, open and export. The original is kept too.</p>
+        </div>
+      </li>
+      <li>
+        <span class="k">Key</span>
+        <div class="v">
+          <span class="url">https://<del>www.</del>youtube.com/watch?v=abc123</span>
+          <p>The key decides what counts as a duplicate. <code>youtu.be/abc123</code> and <code>m.youtube.com/watch?v=abc123</code> get the same key, so they count as one link.</p>
+        </div>
+      </li>
+      <li>
+        <span class="k">Describe</span>
+        <div class="v">
+          <p>Site <code>youtube.com</code>, kind video, sent by Sam on 14 March 2026 at 21:03. The message around the link is kept as its context, up to 200 characters.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="prose">
+      <h3>Bare domains</h3>
+      <p>Links without <code>https://</code> are the risky ones, because plenty of ordinary text looks like <code>name.ending</code>. A bare match counts only if its ending is on the public suffix list, the registry of real domain endings that browsers use. Endings that double as file types or code words, like <code>.md</code>, <code>.py</code> or <code>.id</code>, also need a path.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>In the text</th><th>Result</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">github.com/vercel/next.js</td><td><span class="pill kept">kept</span></td><td><code>.com</code> is a real ending</td></tr>
+          <tr><td class="num">notes.txt</td><td><span class="pill skipped">skipped</span></td><td><code>.txt</code> isn't a domain ending</td></tr>
+          <tr><td class="num">readme.md</td><td><span class="pill skipped">skipped</span></td><td><code>.md</code> is also a file type, and there's no path</td></tr>
+          <tr><td class="num">allegro.pl/oferta/1</td><td><span class="pill kept">kept</span></td><td><code>.pl</code> is also a file type, but the path settles it</td></tr>
+          <tr><td class="num">sam@gmail.com</td><td><span class="pill skipped">skipped</span></td><td>An <code>@</code> comes right before it, so it's an email address</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>The same list decides which site a link is grouped under. <code>m.youtube.com</code> and <code>news.bbc.co.uk</code> group as youtube.com and bbc.co.uk, while <code>alice.github.io</code> stays a site of its own.</p>
+
+      <h3>Saving</h3>
+      <p>The links are written in one database transaction, a thousand at a time, with progress shown. If you cancel, close the tab or run out of disk, nothing is half-saved. The original text is kept, compressed, so a source can be read again when the parser improves.</p>
+    </div>
+  </section>
+
+  <section id="rows">
+    <div class="head">
+      <p class="eyebrow"><code>lib/library/rows.ts</code></p>
+      <h2>Handing the library to the page</h2>
+    </div>
+    <div class="prose">
+      <p>A stored link is a big record: the message, its position, the URL as found, and more. The list needs only a little of it. So the worker reads every link, 10,000 at a time, and builds a compact copy called the lean rows.</p>
+      <p>The rows are stored by column. Each kind of text, such as all the titles, is one long string with the rows joined by a <code>\0</code> character, plus an array of where each row starts. Numbers such as dates and kinds go into typed arrays, which are plain blocks of binary numbers. Values that repeat, like site names, are stored once, and each row keeps a small number that points at its value.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="d" viewBox="0 0 940 250" role="img" aria-label="All titles are one string joined by null characters. An offsets array records where each row starts: 0, 24, 41, 42, 57. Row 1 is the slice from 24 to 40. Site names are stored once; each row holds an index into them.">
+          <defs>
+            <marker id="m4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="fi"/></marker>
+          </defs>
+          <text class="t" x="40" y="32">titles.text: one string</text>
+          <rect class="box" x="40" y="44" width="190" height="34"/>
+          <text x="48" y="66">Lisbon beyond the trams</text>
+          <rect class="sep" x="230" y="44" width="22" height="34"/>
+          <text class="m sm" x="241" y="65" text-anchor="middle">\0</text>
+          <rect class="box acc" x="252" y="44" width="140" height="34"/>
+          <text x="260" y="66">How to ship fast</text>
+          <rect class="sep" x="392" y="44" width="22" height="34"/>
+          <text class="m sm" x="403" y="65" text-anchor="middle">\0</text>
+          <rect class="sep" x="414" y="44" width="22" height="34"/>
+          <text class="m sm" x="425" y="65" text-anchor="middle">\0</text>
+          <rect class="box" x="436" y="44" width="130" height="34"/>
+          <text x="444" y="66">Rust ownership</text>
+          <rect class="sep" x="566" y="44" width="22" height="34"/>
+          <text class="m sm" x="577" y="65" text-anchor="middle">\0</text>
+          <text class="m" x="598" y="66">…</text>
+
+          <line class="ln-m" x1="72" y1="156" x2="42" y2="83" marker-end="url(#m4)"/>
+          <line class="ln" x1="136" y1="156" x2="252" y2="83" marker-end="url(#m4)"/>
+          <line class="ln" x1="200" y1="156" x2="414" y2="83" marker-end="url(#m4)"/>
+          <line class="ln-m" x1="264" y1="156" x2="436" y2="83" marker-end="url(#m4)"/>
+          <line class="ln-m" x1="328" y1="156" x2="588" y2="83" marker-end="url(#m4)"/>
+
+          <text class="t" x="440" y="178">titles.offsets: Uint32Array</text>
+          <rect class="box" x="40" y="158" width="64" height="30"/>
+          <text x="72" y="178" text-anchor="middle">0</text>
+          <rect class="box acc" x="104" y="158" width="64" height="30"/>
+          <text x="136" y="178" text-anchor="middle">24</text>
+          <rect class="box acc" x="168" y="158" width="64" height="30"/>
+          <text x="200" y="178" text-anchor="middle">41</text>
+          <rect class="box" x="232" y="158" width="64" height="30"/>
+          <text x="264" y="178" text-anchor="middle">42</text>
+          <rect class="box" x="296" y="158" width="64" height="30"/>
+          <text x="328" y="178" text-anchor="middle">57</text>
+          <rect class="box" x="360" y="158" width="64" height="30"/>
+          <text class="m" x="392" y="178" text-anchor="middle">…</text>
+          <text class="m sm" x="72" y="206" text-anchor="middle">row 0</text>
+          <text class="m sm" x="136" y="206" text-anchor="middle">row 1</text>
+          <text class="m sm" x="200" y="206" text-anchor="middle">row 2</text>
+          <text class="m sm" x="264" y="206" text-anchor="middle">row 3</text>
+          <text class="m sm" x="328" y="206" text-anchor="middle">row 4</text>
+          <text class="acc-t" x="40" y="236">row 1 = text.slice(24, 41 - 1) = "How to ship fast"</text>
+
+          <text class="t" x="680" y="32">domains: Uint32Array</text>
+          <rect class="box" x="680" y="44" width="44" height="34"/>
+          <text x="702" y="66" text-anchor="middle">0</text>
+          <rect class="box" x="724" y="44" width="44" height="34"/>
+          <text x="746" y="66" text-anchor="middle">1</text>
+          <rect class="box" x="768" y="44" width="44" height="34"/>
+          <text x="790" y="66" text-anchor="middle">0</text>
+          <rect class="box" x="812" y="44" width="44" height="34"/>
+          <text x="834" y="66" text-anchor="middle">2</text>
+          <line class="ln" x1="768" y1="84" x2="768" y2="140" marker-end="url(#m4)"/>
+          <text class="m sm" x="778" y="116">index into</text>
+          <rect class="box" x="680" y="146" width="240" height="96" rx="6"/>
+          <text class="t" x="694" y="168">domainNames</text>
+          <text x="694" y="192">0  youtube.com</text>
+          <text x="694" y="212">1  github.com</text>
+          <text x="694" y="232">2  x.com</text>
+        </svg>
+      </div>
+      <figcaption>Row 1's title is a slice of the long string, found with two numbers from the offsets array. Row 2 has no title, so its slice is empty. Sites, senders and sources are each stored once.</figcaption>
+    </figure>
+    <div class="prose">
+      <p>This matters when the rows cross from the worker to the page. Sending 50,000 objects means copying them one at a time. A typed array is different: its memory can be handed over to the page, so nothing is copied at all.</p>
+    </div>
+    <figure>
+      <div class="scroll narrow">
+        <svg class="d" viewBox="0 0 940 130" role="img" aria-label="Handing 50,000 rows to the page takes about 40 ms as objects and about 4 ms as columns, against a 50 ms budget.">
+          <text x="40" y="24">50,000 rows as objects, copied one by one</text>
+          <rect class="bar-b" x="40" y="32" width="400" height="24"/>
+          <text class="t" x="452" y="49">about 40 ms</text>
+          <text x="40" y="84">the same rows as columns, arrays handed over</text>
+          <rect class="bar-a" x="40" y="92" width="40" height="24"/>
+          <text class="t" x="92" y="109">about 4 ms</text>
+          <line class="ln-m dash" x1="540" y1="30" x2="540" y2="122"/>
+          <text class="m sm" x="548" y="40">50 ms: the page's budget</text>
+          <text class="m sm" x="548" y="56">before a pause shows</text>
+        </svg>
+      </div>
+      <figcaption>Handing 50,000 rows to the page, drawn to scale. As columns, it fits well inside the 50 ms the page can spend before a pause becomes noticeable.</figcaption>
+    </figure>
+    <div class="prose">
+      <p>Each row also carries its search text, made ahead of time: the URL, title, message text, sender and the site's other names, lowercased and with accents removed. That is why <code>belem</code> finds Belém, and <code>x.com</code> finds links saved as twitter.com.</p>
+    </div>
+  </section>
+
+  <section id="search">
+    <div class="head">
+      <p class="eyebrow"><code>lib/query/view.ts</code></p>
+      <h2>Search and filters</h2>
+    </div>
+    <div class="prose">
+      <p>Search runs on the page at every keystroke, over the lean rows. For each word you type, it calls <code>indexOf</code> on the one long search string. <code>indexOf</code> is the browser's built-in text search, and it is very fast. On a hit, the offsets say which row the hit is in. The search then jumps to the start of the next row, because one hit per row is enough.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="d" viewBox="0 0 940 228" role="img" aria-label="Searching for tram: a hit in row 0 marks it and jumps to row 1; indexOf then finds the next hit in row 2, which jumps to row 3, where nothing more is found. The hits array is 1, 0, 1, 0.">
+          <defs>
+            <marker id="m6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="fa"/></marker>
+            <marker id="m6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="fi"/></marker>
+          </defs>
+          <text class="t" x="40" y="24">search.text, looking for "tram"</text>
+
+          <path class="ln-acc" d="M172 98 C 205 58, 290 58, 320 97" marker-end="url(#m6)"/>
+          <text class="acc-t sm" x="246" y="54" text-anchor="middle">jump to row 1</text>
+          <path class="ln dash" d="M326 98 C 400 62, 516 62, 590 97" marker-end="url(#m6b)"/>
+          <text class="sm" x="458" y="58" text-anchor="middle">indexOf finds the next hit</text>
+          <path class="ln-acc" d="M612 98 C 645 58, 772 58, 804 97" marker-end="url(#m6)"/>
+          <text class="acc-t sm" x="708" y="54" text-anchor="middle">jump to row 3</text>
+
+          <rect class="box" x="40" y="100" width="260" height="34"/>
+          <text x="48" y="122">…beyond the <tspan class="hit">tram</tspan>s youtube…</text>
+          <rect class="sep" x="300" y="100" width="22" height="34"/>
+          <text class="m sm" x="311" y="121" text-anchor="middle">\0</text>
+          <rect class="box" x="322" y="100" width="220" height="34"/>
+          <text x="330" y="122">…how to ship fast github…</text>
+          <rect class="sep" x="542" y="100" width="22" height="34"/>
+          <text class="m sm" x="553" y="121" text-anchor="middle">\0</text>
+          <rect class="box" x="564" y="100" width="220" height="34"/>
+          <text x="572" y="122">…<tspan class="hit">tram</tspan> stop map x.com…</text>
+          <rect class="sep" x="784" y="100" width="22" height="34"/>
+          <text class="m sm" x="795" y="121" text-anchor="middle">\0</text>
+          <rect class="box" x="806" y="100" width="114" height="34"/>
+          <text x="814" y="122">…rust own…</text>
+
+          <text class="m sm" x="170" y="152" text-anchor="middle">row 0</text>
+          <text class="m sm" x="432" y="152" text-anchor="middle">row 1</text>
+          <text class="m sm" x="674" y="152" text-anchor="middle">row 2</text>
+          <text class="m sm" x="863" y="152" text-anchor="middle">row 3</text>
+          <line class="ln-m dash" x1="170" y1="158" x2="170" y2="182"/>
+          <line class="ln-m dash" x1="432" y1="158" x2="432" y2="182"/>
+          <line class="ln-m dash" x1="674" y1="158" x2="674" y2="182"/>
+          <line class="ln-m dash" x1="863" y1="158" x2="863" y2="182"/>
+
+          <text class="t" x="40" y="176">hits:</text>
+          <rect class="box acc" x="145" y="184" width="50" height="30"/>
+          <text class="t" x="170" y="204" text-anchor="middle">1</text>
+          <rect class="box" x="407" y="184" width="50" height="30"/>
+          <text x="432" y="204" text-anchor="middle">0</text>
+          <rect class="box acc" x="649" y="184" width="50" height="30"/>
+          <text class="t" x="674" y="204" text-anchor="middle">1</text>
+          <rect class="box" x="838" y="184" width="50" height="30"/>
+          <text x="863" y="204" text-anchor="middle">0</text>
+        </svg>
+      </div>
+      <figcaption>Searching for “tram”. Each hit marks its row and skips the rest of it. A row has to contain every word you typed, and the longest word is searched first, because it usually has the fewest hits. The result is kept, so picking a filter afterwards doesn't search again.</figcaption>
+    </figure>
+    <div class="prose">
+      <p>The filters and the counts beside them come from a single loop over every row, which checks each row against all the filters at once. A row that fails exactly one filter still counts toward that filter's options. So each number tells you how many links you would get if you also picked that value.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>A row that</th><th>Counts toward</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>passes every filter</td><td>the list, and every count in the side panel</td></tr>
+          <tr><td>fails only the site filter</td><td>the Sites counts only: picking its site would let it in</td></tr>
+          <tr><td>fails two filters or more</td><td>nothing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>Sorting is cheap because the rows arrive newest first. Oldest first is the same list read backwards. Sorting by site or by import drops each row into a numbered bucket, a counting sort that takes one pass. Collapsing duplicates is counting too, because copies of a link share one number.</p>
+      <p>The search box shows each letter as you type it. React's <code>useDeferredValue</code> lets the list catch up a frame later, so typing never waits for the list.</p>
+    </div>
+  </section>
+
+  <section id="list">
+    <div class="head">
+      <p class="eyebrow"><code>components/library/LinkList.tsx</code></p>
+      <h2>Drawing 98,000 rows</h2>
+    </div>
+    <div class="prose">
+      <p>The list is virtualized, so only the rows you can see exist in the page. Every row is exactly 50 px tall. A list of 98,000 links is an empty box 4.9 million pixels tall, and the scrollbar behaves as if every row were there.</p>
+      <p>When you scroll, working out which rows are in view takes one division, because no row ever has to be measured. Those rows are drawn, plus 8 above and 8 below so that fast scrolling doesn't show gaps. Each row is moved into place with a CSS transform.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="d" viewBox="0 0 940 360" role="img" aria-label="Halfway down a 98,000-row list in a 600 pixel window: row 49,000 is the first in view, 12 rows are visible, and 8 more are drawn above and below, so the page holds 28 rows. The other 97,972 rows exist only as height.">
+          <text class="m sm" x="60" y="20">whole list, not to scale</text>
+          <rect class="box" x="60" y="30" width="56" height="300" rx="4"/>
+          <rect class="box acc" x="60" y="172" width="56" height="16"/>
+          <text class="m sm" x="88" y="350" text-anchor="middle">4,900,000 px tall</text>
+          <line class="ln-m dash" x1="116" y1="172" x2="230" y2="40"/>
+          <line class="ln-m dash" x1="116" y1="188" x2="230" y2="330"/>
+
+          <rect class="box dashed" x="230" y="40" width="290" height="56" rx="4"/>
+          <text class="m sm" x="375" y="72" text-anchor="middle">8 rows above, off screen</text>
+
+          <rect class="box acc" x="230" y="100" width="290" height="170" rx="4"/>
+          <line class="rule-l" x1="230" y1="114.17" x2="520" y2="114.17"/>
+          <line class="rule-l" x1="230" y1="128.33" x2="520" y2="128.33"/>
+          <line class="rule-l" x1="230" y1="142.5" x2="520" y2="142.5"/>
+          <line class="rule-l" x1="230" y1="156.67" x2="520" y2="156.67"/>
+          <line class="rule-l" x1="230" y1="170.83" x2="520" y2="170.83"/>
+          <line class="rule-l" x1="230" y1="185" x2="520" y2="185"/>
+          <line class="rule-l" x1="230" y1="199.17" x2="520" y2="199.17"/>
+          <line class="rule-l" x1="230" y1="213.33" x2="520" y2="213.33"/>
+          <line class="rule-l" x1="230" y1="227.5" x2="520" y2="227.5"/>
+          <line class="rule-l" x1="230" y1="241.67" x2="520" y2="241.67"/>
+          <line class="rule-l" x1="230" y1="255.83" x2="520" y2="255.83"/>
+          <rect class="bar-b" x="244" y="104.6" width="180" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="118.8" width="140" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="132.9" width="200" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="147.1" width="160" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="161.3" width="120" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="175.4" width="190" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="189.6" width="150" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="203.8" width="170" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="217.9" width="130" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="232.1" width="200" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="246.3" width="145" height="5" rx="2"/>
+          <rect class="bar-b" x="244" y="260.4" width="175" height="5" rx="2"/>
+
+          <rect class="box dashed" x="230" y="274" width="290" height="56" rx="4"/>
+          <text class="m sm" x="375" y="306" text-anchor="middle">8 rows below, off screen</text>
+
+          <text class="sm" x="528" y="111">row 49,000</text>
+          <text class="acc-t sm" x="528" y="189">600 px window</text>
+          <text class="sm" x="528" y="267">row 49,011</text>
+
+          <text class="t" x="660" y="64">scrolled to 2,450,000 px</text>
+          <text x="660" y="86">2,450,000 ÷ 50 = row 49,000</text>
+          <text class="t" x="660" y="130">row 49,000 is placed with</text>
+          <text x="660" y="152">translateY(2,450,000px)</text>
+          <text class="t" x="660" y="196">rows in the page: 28</text>
+          <text x="660" y="218">12 in view, 8 above, 8 below</text>
+          <text class="t" x="660" y="262">the other 97,972 rows</text>
+          <text x="660" y="284">exist only as height</text>
+        </svg>
+      </div>
+      <figcaption>Halfway down a 98,000-link list in a 600 px window. The page holds 28 rows, and the rest of the list is empty height. Scrolling the 98,000-link list at 15 rows a frame for 4 seconds held 60 frames a second.</figcaption>
+    </figure>
+    <div class="prose">
+      <p>Each row reads its own data straight from the columns by number, and only those rows format anything for display. The React Compiler keeps rows that stay on screen from being redrawn as you scroll. For the keyboard, only the current row is in the Tab order; <code>j</code> and <code>k</code> move between rows and scroll as needed.</p>
+    </div>
+  </section>
+
+  <section id="numbers">
+    <div class="head">
+      <p class="eyebrow">PRD §8.6</p>
+      <h2>Measured</h2>
+    </div>
+    <div class="prose">
+      <p>Measured on production builds during milestones M1 to M5, with test libraries of 50,000 and 98,000 links. The budgets are the PRD's.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>What</th><th>Links</th><th>Measured</th><th>Budget</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Find the links in a 10 MB export</td><td class="num">98,000</td><td class="num">about 0.8 s</td><td class="num">–</td></tr>
+          <tr><td>Whole import, saving included, in Chrome</td><td class="num">98,000</td><td class="num">5.3 s</td><td class="num">6 s</td></tr>
+          <tr><td>The same import in Safari</td><td class="num">98,000</td><td class="num">3.5 s</td><td class="num">6 s</td></tr>
+          <tr><td>Longest pause on the page during that import</td><td class="num">98,000</td><td class="num">42 ms</td><td class="num">50 ms</td></tr>
+          <tr><td>List on screen after a reload</td><td class="num">98,000</td><td class="num">0.9 s</td><td class="num">–</td></tr>
+          <tr><td>A keystroke in search, to the redrawn list</td><td class="num">50,000</td><td class="num">33–49 ms</td><td class="num">100 ms</td></tr>
+          <tr><td>Picking a site filter</td><td class="num">50,000</td><td class="num">11 ms</td><td class="num">–</td></tr>
+          <tr><td>Collapsing duplicates, or sorting by site</td><td class="num">50,000</td><td class="num">15 ms</td><td class="num">–</td></tr>
+          <tr><td>The search code alone, per keystroke</td><td class="num">98,000</td><td class="num">12 ms at most</td><td class="num">–</td></tr>
+          <tr><td>Scrolling at 15 rows a frame</td><td class="num">98,000</td><td class="num">60 fps, 28 rows</td><td class="num">60 fps</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="limits">
+    <div class="head">
+      <h2>Known limits</h2>
+    </div>
+    <div class="prose">
+      <ul class="limits">
+        <li><strong>Saving is the slowest step.</strong> IndexedDB charges for every record, about 22,000 links a second. Packing links into blocks would save faster, but search, stars and re-extract are built on one record per link, so faster saving is left for later.</li>
+        <li><strong>The list has a height ceiling.</strong> Browsers cap how tall an element can be. At 50 px a row, the list can reach about 360,000 links in Firefox and 670,000 in Chrome and Safari. Past that, rows would need scaled positions.</li>
+        <li><strong>Search is a straight scan.</strong> At 100,000 links it stays well inside its budget. Beyond that, the PRD plans a proper search index (MiniSearch).</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Written from the linkthing code and the PRD (v2.36), 27 October 2026. The main files: <code>lib/extract/</code>, <code>lib/workers/</code>, <code>lib/library/rows.ts</code>, <code>lib/query/view.ts</code> and <code>components/library/LinkList.tsx</code>.
+  </footer>
+
+</main>
+</body>
+</html>

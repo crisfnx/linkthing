@@ -6,7 +6,7 @@
 | **One-liner** | Drop in any text — chat exports, notes, markdown, bookmark files — and get every link back, organized, searchable and yours. |
 | **Owner** | Cris Vlasiu |
 | **Created** | September 2026 (v1: WhatsApp Link Extractor) |
-| **Updated** | 23 October 2026 (v2.35: M5 accessibility and Lighthouse; see Document history) |
+| **Updated** | 27 October 2026 (v2.36: backup and sync to the user's own drive proposed; see Document history) |
 | **Status** | MVP built (M0–M5); the gate, two weeks of real use run locally, is next |
 
 ---
@@ -58,7 +58,7 @@ A local-first web app: paste or drop text, get every URL out with whatever conte
 
 - Not a bookmark manager you save into daily (Phase 3+ may add a PWA share target).
 - Not a read-it-later reader.
-- No accounts, sync or server-side storage in the MVP.
+- No accounts, sync or server-side storage in the MVP. Backup and sync to the user's own drive, with no LinkVault server, is proposed for later (§6.10).
 - No page fetching in the MVP build. Link previews need a server (see §6.8 for why), so they are designed now, given their data table and UI slots in the MVP, and shipped as milestone M7, after tags (M6), behind an opt-in setting.
 
 ---
@@ -601,6 +601,99 @@ Per link, "Suggest tags" in the drawer runs the tagging pass for that one link.
 - `Hosted` (LinkVault's own key through `app/api/classify`) is Phase 3. Without accounts there is no user to put a daily cap on: a per-IP cap is easy to get around, and the route would be a free model proxy on our key.
 - What is sent per link is listed on the settings page, and again in the Organize wizard before its first request: site, title, description, canonical URL path without the query string, up to 200 characters of message text around the link (its own message and nearby ones, §4.8), and the tag vocabulary. Never the whole chat, never sender names. `Include chat context` (default on) can be turned off to send preview metadata only.
 
+### 6.10 Backup and sync to your own drive (proposal)
+
+Proposed on 27 Oct 2026 at the owner's request. It isn't scheduled: whether and when to build it is decided at the gate or later (§11, §12), and the decisions at the end of this section are settled then. If it's built, it replaces the Supabase sync planned for Phase 3 (§13).
+
+**The idea.** The library is copied to storage the user already has: Google Drive, Dropbox or OneDrive. It then survives a browser clearing its storage, and it can be opened on another device. The browser talks to the provider directly. LinkVault runs no server for it, keeps no copy and has no accounts. Nothing is copied until the user connects a drive, and the app works fully without one.
+
+**Why.**
+- Safari deletes a site's storage after 7 days without a visit. That is the biggest data-loss risk (§15), and today the only protection is a backup the user remembers to download (§6.5).
+- Using LinkVault on a phone and a laptop means importing the same exports on each.
+
+**What already exists.**
+- The backup file (§6.5) holds the whole library: sources with their text, links, stars and settings. Every record is checked on the way in.
+- A restore merges. It adds what's missing and never replaces or deletes, so a drive's copy can be restored into a device that has a library of its own.
+- Ids are stable (§5). The same chat gives the same link ids on any device, so copies of a link from two devices line up instead of doubling.
+
+**Stage 1: backup to your drive** (size S–M)
+- **Connecting.** Settings → Storage → **Connect Google Drive** opens Google's sign-in popup. LinkVault asks for access to the files it creates, never the rest of the drive.
+- **When it backs up.** After each import, update, re-extract or delete, and once a day when only stars, names or settings have changed. Uploads use the provider's resumable upload, so a large file survives a dropped connection.
+- **Versions.** The last 5 backups are kept, and LinkVault deletes older ones. The 98 k-link library's backup is 6.4 MB (§6.5), so five take about 32 MB of a free Google account's 15 GB.
+- **Status.** Settings → Storage says "Backed up to Google Drive 2 minutes ago", with **Back up now**. A failed upload says why and is tried again later.
+- **Restoring.** **Restore from Google Drive** sits beside Restore from a backup, in Settings and on the first screen. A new device or a cleared browser gets the library back in two clicks. It is the existing restore, reading its file from the drive.
+- **Disconnecting.** Disconnect forgets the sign-in and leaves the files on the drive, and says so. Deleting them is a separate action, confirmed first.
+- **Cross-device use.** Stage 1 alone allows it: connect the same drive on the second device and restore. Later changes don't flow between devices on their own; that is stage 2.
+
+**Stage 2: sync between devices** (size M–L; best after M6, since tags are the other annotation that must merge)
+- **The cycle.** Each device runs it when it opens, after each change and every few minutes while it's open. It reads what other devices have written since it last looked, merges that into its library, then writes its own changes.
+- **Each device writes only its own files.** Two devices never overwrite the same file, so there are no write conflicts to detect, and the design works the same on every provider, a synced folder included. The proposed layout, in one folder:
+  - each source part as an immutable file named by its id, written once, when an import adds it;
+  - a log per device of what changed: sources added, renamed or deleted, and stars and tags set or cleared, each with its time;
+  - now and then the logs are folded into a snapshot, so a new device reads one file, not every change ever made.
+- **Links aren't uploaded.** Every device gets the same links from the same text (§4, §5). So a device that receives a new part extracts its links itself, as re-extract does (7.5 s for 98 k links, §8.6). Only the compressed text and the changes travel. The upload size is to be measured.
+- **The same chat on two devices.** Imported separately, it has two source ids. As in a restore, a part whose text is already stored (by content hash) is recognised: the earlier import's id is kept, and the other device re-extracts the source under it. Stars are keyed by `urlKey`, so they're untouched. A newer export of a chat imported on another device is offered as an update, as at import (§6.1).
+- **Deletes are recorded.** A restore only adds, so a source deleted on one device would come back from another. Sync records each deleted source as deleted, with its time, and every device respects that. Today an unstar deletes an annotation row that holds nothing else (`toggleStar`). With sync the row stays, without the star, so the unstar has a time to win with.
+- **The newest change wins.** This applies per source name and per annotation, by `updatedAt`, which annotations already carry; a tie goes to the device id that sorts first. It replaces, for sync only, the restore's rule that a star on either side survives (§6.5). Device clocks set the order: a clock that is minutes out only changes which of two near-simultaneous edits wins.
+- **A safety copy first.** Before a device's first sync, its library is backed up to the drive as in stage 1, so a sync mistake can always be undone.
+
+**Providers.** One small interface (list, read, write and delete in LinkVault's folder), with a module per provider. Google Drive comes first. Every provider detail here is to be verified at implementation.
+
+| Provider | From a web page | Notes |
+|---|---|---|
+| Google Drive | Yes: the Drive REST API, with Google Identity Services for sign-in | There are two narrow scopes. `drive.file` gives a visible LinkVault folder, with access only to files LinkVault created. `drive.appdata` gives a hidden app folder. Access to the whole drive would need Google's security assessment, and isn't needed |
+| Dropbox | Yes: its HTTP API, with PKCE sign-in | "App folder" access: `Apps/LinkVault` only |
+| OneDrive | Yes: Microsoft Graph, with MSAL.js | The app's own folder (`approot`) |
+| iCloud Drive | No | Apple offers no iCloud Drive API to web pages. iPhone users can use the others |
+| A synced folder | Chrome and Edge on desktop only | The File System Access API. The user picks a folder once, inside a Dropbox, iCloud Drive or OneDrive desktop folder, and LinkVault writes there; the provider's app syncs it. No sign-in |
+
+**Encryption.**
+- **Who can read the files.** A drive's provider can read what's stored on it.
+- **With a sync passphrase,** files are encrypted in the browser before upload:
+  - with AES-GCM, using a key derived from the passphrase (PBKDF2 in Web Crypto, with iterations set by current OWASP guidance);
+  - the salt is kept in a small unencrypted header file;
+  - the passphrase is never uploaded.
+- **A forgotten passphrase** makes the drive's copy unreadable. The device's own library is unaffected, and a new passphrase starts a new copy. This is said before the passphrase is set.
+
+**Signing in.**
+- **Google, from a web page alone,** gives an access token that lasts about an hour, and no refresh token. While the user is signed in to Google, renewing the token needs no typing, but it can open a popup, and browsers allow a popup only after a click. So without a server, an automatic backup runs while a token is valid. Otherwise the app asks first ("Back up to Google Drive: Continue").
+- **Background sync with Google** could use a small route handler. It would hold LinkVault's Google client secret and exchange sign-in codes for tokens, while the refresh token is kept in the browser. The server would see tokens pass through but store none. M7 brings route handlers anyway. This is decided with stage 2.
+- **Dropbox and Microsoft** give a web page refresh tokens without a server (PKCE), so they don't have this limit.
+- **Token storage.** A token is stored in IndexedDB only while a drive is connected. Like a stored API key (§6.9), it could be read by injected script. It reaches only LinkVault's own files, and with a passphrase those are encrypted.
+
+**What changes elsewhere if it's built.**
+- **Principle 1 (§2)** gains its one exception. With a drive connected, the whole library, text included, is copied to the user's own drive and nowhere else, encrypted unless the user chose otherwise.
+- **The Storage promise.** While a drive is connected, Settings → Storage's promise is reworded: "Your library is kept in this browser and backed up to your Google Drive, encrypted. LinkVault never sees it."
+- **The CSP (§8.7).** For Google, `script-src` adds `https://accounts.google.com`, since Google's sign-in library can't be self-hosted, and `connect-src` adds `https://www.googleapis.com`. Any `frame-src` the sign-in needs is checked then. Each further provider adds its API and sign-in hosts.
+- **Setup for the owner.** A Google Cloud project with an OAuth client and consent screen. Before a public launch, Google's app verification, which is light for narrow scopes.
+- **Hosted AI (Phase 3)** waits for an identity it can cap. Drive sync doesn't give LinkVault accounts, but a verified Google sign-in could serve; that is decided then.
+
+**Decisions when it's taken up** (recommended defaults in bold)
+1. Scope: **stage 1 first**, and stage 2 after M6. Stage 1 can move ahead of Phase 1.5 if the gate shows Safari losing data.
+2. Encryption: **a passphrase by default**. Users can skip it when connecting, and the trade-off is said plainly.
+3. Where files go on Google Drive: **a visible LinkVault folder** (`drive.file`). The files can then be seen, downloaded and deleted outside LinkVault (principle 5).
+4. Providers and their order: **Google Drive first**; then Dropbox, OneDrive and the synced folder as they're asked for.
+5. Signing in for stage 2: **from the browser only**, unless background sync turns out to need the token route.
+
+**Draft acceptance criteria** (moved to §11 when scheduled)
+
+Stage 1
+- [ ] Connecting Google Drive asks only for access to LinkVault's own files. Disconnecting leaves the files and says so.
+- [ ] A backup is on the drive within a minute of an import, and the last 5 are kept.
+- [ ] After Delete everything, Restore from Google Drive brings back every source, link and star, with every count as before. Restoring twice changes nothing.
+- [ ] With a passphrase, the drive's files can't be read without it. A wrong passphrase is refused with a message, and the library is left unchanged.
+- [ ] With no drive connected (the default), the app makes no network requests beyond its own files.
+
+Stage 2
+- [ ] A star, an unstar, a rename and a delete made on one device show on the other within a few minutes while both are open, and nothing deleted comes back.
+- [ ] Two devices that change different things while offline both keep their changes after the next sync.
+- [ ] An import on one device shows on the other with the same link ids, counts and stars.
+
+**Risks.**
+- **A sync bug deletes or brings back data.** Deletes are recorded only from explicit deletes. A stage 1 backup is made before the first sync, and the last 5 backups are kept.
+- **A passphrase is lost.** The device's library is unaffected, and the copy is said to be unrecoverable before the passphrase is set.
+- **A provider changes its API or limits.** Each provider is a small module and one of several, and the downloaded backup (§6.5) stays.
+
 ---
 
 ## 7. UX
@@ -823,6 +916,7 @@ docs/
 | M0 | `default-src 'self'; script-src 'self' 'unsafe-inline'` (see above); `style-src 'self' 'unsafe-inline'`; `img-src 'self' data: blob:`; `font-src 'self'`; `worker-src 'self' blob:`; `connect-src 'self'`; `object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` |
 | M7 | `img-src` adds `https:` (favicons, video thumbnails and preview images come from arbitrary hosts; this also opens the image-URL exfiltration path above) |
 | M8 | `connect-src` adds `https://api.anthropic.com` (own-key mode) |
+| Drive sync (proposal, §6.10) | For Google Drive, `script-src` adds `https://accounts.google.com` (its sign-in library) and `connect-src` adds `https://www.googleapis.com`. The full list, any `frame-src` included, is checked when it's built. Each further provider adds its own hosts |
 
 ### 8.8 Preview service (M7)
 
@@ -972,7 +1066,7 @@ Quality
 
 - [ ] The MVP, run locally (no deploy for now, owner's decision), has been used for at least two weeks on real exports, including at least one chat update (§6.1).
 - [ ] A short note in `docs/` records what was missing or annoying, whether stars got used (a stand-in for whether tags will be), and how many links have no title and no context or nearby text beyond the URL (the share M7 previews would have to fix).
-- [ ] The order of P1.5 and M6–M8 is set in §12 and in §14 ("Order after the MVP"), and the next milestone's list below is revised.
+- [ ] The order of P1.5 and M6–M8 is set in §12 and in §14 ("Order after the MVP"), along with whether and where drive sync (§6.10) goes, and the next milestone's list below is revised.
 
 ### P1.5 Breadth
 
@@ -1078,7 +1172,7 @@ Eval
 | M3 | Browse | Workspace layout behind the client loader (§8.2), lean rows from the worker, virtualized list view, Tier-0 derived titles, plain search, facets, sort, dedupe toggle, details drawer with an empty preview slot, URL-synced state, keyboard nav | M |
 | M4 | Persist and export | Source rename/delete, re-extract (with adapter and day/month override), canonicalizer re-key (merges, splits, orphans), annotations (star), JSON / CSV / Markdown / plain exports with escaping, backup import, Replace for non-chat sources (§6.1), settings, storage meter and `persist()` request, delete flows | M |
 | M5 | Polish and ship | Empty states, mobile layout, dark mode pass, a11y audit, Lighthouse, Playwright E2E in CI on every pull request, README. No deploy for now and no new visual style: the design system comes after the gate (owner's decisions, 23 Oct 2026) | M |
-| Gate | Use it | Use M0–M5, run locally, on real exports for a couple of weeks. Then order Phase 1.5 and M6–M8 from what that shows (do you need the other sources and views? do you actually tag? which links lack signal?) | — |
+| Gate | Use it | Use M0–M5, run locally, on real exports for a couple of weeks. Then order Phase 1.5 and M6–M8 from what that shows (do you need the other sources and views? do you actually tag? which links lack signal?), and decide whether and where drive sync (§6.10) goes | — |
 | P1.5 | Breadth | Markdown and Netscape bookmarks adapters, generic HTML adapter, Telegram JSON; grouped and compact views; sections within a site (subreddits, accounts, subdomains; §6.3); Netscape HTML export; editable tracking-param list (saving re-keys, §4.4), with Settings' canonical-vs-original display (§6.7); a storage limit with warnings (§6.4) | M |
 | M6 | Tags and smarter search | Tag vocabulary with immutable ids, tags on annotations, tag chips, drawer tag editor with autocomplete, Tags facet with category pinning, Tag manager (rename, merge with alias, merge suggestions, delete), bookmark folders → tags (once the Phase 1.5 bookmarks adapter exists), the full search grammar: field prefixes, `tag:` / `site:`, plain-word matching and interpretation chips (§6.3, §6.9 layers 1–2). No server needed | M |
 | M7 | Link previews | §6.8 Tiers 1 and 2: settings tier, favicons and video thumbnails, `/api/preview` with connect-time guard, CDN cache and Redis rate limits (§8.8), drawer preview block, row titles, card view, bulk fetch with progress, exports use titles, CSP `img-src` widened | M |
@@ -1099,8 +1193,8 @@ Build order inside the codebase: `lib/extract/types.ts` → `url/*` with tests (
 **Phase 3 — Everyday use**
 - PWA: manifest, service worker, installable; **Web Share Target** so "share to LinkVault" from any app on Android / desktop Chrome saves a link directly. This closes the loop on the original "send links to myself" habit. It also enables offline reloads (§10), and a home-screen install escapes Safari's storage cap (§15); pull it forward if Safari users lose data.
 - Status (unread / read / archived), notes, saved searches. Saved searches are the named views that Collections used to be; add collections only if saved searches don't cover it. Tags themselves moved up to M6.
-- Hosted AI mode (§8.9), once sync gives users an identity: per-account daily cap held in Redis, request size cap, no payload logging, key only on the server.
-- Optional cloud sync (Supabase) as an explicit opt-in with end-to-end encryption of the payload; the app stays fully functional without it.
+- Hosted AI mode (§8.9), once users have an identity it can cap: accounts, or a verified Google sign-in if drive sync is built (§6.10). Per-account daily cap held in Redis, request size cap, no payload logging, key only on the server.
+- Sync: proposed as backup and sync to the user's own drive (§6.10), with no LinkVault server and no accounts. If it's built, it replaces the Supabase sync once planned here, and its stage 1 (backup and restore) can come well before Phase 3.
 - Browser extension: save current tab, import browser history / bookmarks directly.
 
 **Phase 4 — Intelligence**
@@ -1148,6 +1242,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | Export selection (M4) | none / select rows | **Select rows** (owner's choice): `x` selects the focused row, shift-click a range, and a bar says "12 selected · Export · Clear". As built: a selection is of links, every copy checked; a checkbox takes the site badge's place on hover or focus (§6.5) |
 | Backup validation (M4) | hand-written checks / zod | **zod** (owner's choice): records checked against schemas before anything is written; pinned to a release at least two weeks old and loaded only when restoring. As built: 4.6.5, its own chunk fetched by the worker's dynamic `import()` (§6.5) |
 | Bulk transport | synchronous / Batches API | **Synchronous**, resumable by `inputHash`; Batches would save about $0.12 per 5,000 links on Haiku 5.5 (§8.9) |
+| Sync (proposal) | Supabase with accounts / the user's own drive | **The user's own drive** (§6.10): Google Drive first; backup and restore before two-way sync; encrypted with a passphrase by default. Whether and when it's built is decided at the gate |
 
 ---
 
@@ -1159,7 +1254,7 @@ Each has a recommended default; building proceeds on the default unless changed.
 | iOS exports are zips, so a `.txt`-only importer fails every iPhone user | Zip adapter in the MVP (§3) |
 | People re-export the same chat every few months; duplicates pile up, and WhatsApp's export limit drops the oldest messages from newer exports | Updating a chat merges by message key (§6.1); nothing already stored is replaced |
 | Regex URL extraction has a long tail of false positives / negatives | Edge-case table as the contract; conservative defaults; never silently drop, always count skipped |
-| Safari deletes script-writable storage, IndexedDB included, for a site not visited within 7 days of Safari use (home-screen web apps are exempt). For a local-first app this is the biggest data-loss risk | `navigator.storage.persist()` after the first import (verify what it buys on Safari); raw input gzipped; storage meter; backup export prompt after big imports, with backup import as the restore path (as built in M4: suggested after imports of 1,000 links or more, restorable from the first screen, §6.5); the installable PWA (Phase 3, pulled forward if needed) |
+| Safari deletes script-writable storage, IndexedDB included, for a site not visited within 7 days of Safari use (home-screen web apps are exempt). For a local-first app this is the biggest data-loss risk | `navigator.storage.persist()` after the first import (verify what it buys on Safari); raw input gzipped; storage meter; backup export prompt after big imports, with backup import as the restore path (as built in M4: suggested after imports of 1,000 links or more, restorable from the first screen, §6.5); the installable PWA (Phase 3, pulled forward if needed); automatic backups to the user's own drive (proposed, §6.10) |
 | Changing the canonicalizer or tracking-param list orphans stars, tags and previews | Everything per-URL is keyed by `urlKey`; the canonicalizer is versioned and a change re-keys stored data, including splits and rows whose links are gone (§4.4) |
 | Large inputs freeze the tab | Worker + two-pass scan/parse + chunked writes; cancel button; atomic imports; a 100 MB limit (§6.1). Left: a link-dense 100 MB file peaks at 4.6 GB in Safari and can make the page stutter under memory pressure; extracting a slice at a time would fix it (§8.2). The list view stops scrolling to its end past about 360 k links in Firefox (at 50 px a row), the browser's element height cap (§8.6); filters narrow it below that long before, and scaled offsets would lift it |
 | Preview service abused as an open proxy (SSRF) or as a scraper | Guard step in §8.8: scheme checks, address checks at connect time on every hop, redirect cap, size and time caps, Redis-backed rate limit, honest User-Agent |
@@ -1305,3 +1400,4 @@ keep changes small, and run pnpm lint && pnpm typecheck && pnpm test before repo
 | 23 Oct 2026 | v2.33: M5 phone layout (m5-layout). Every screen checked at phone and tablet widths. A compact toolbar on phones; tap targets of 24 px or more; and **Select**, so links can be chosen by touch (§7). The library offers Reload when it can't be read. M5 drops the deploy and keeps the plain look, the design system coming after the gate, and the gate is run locally (owner's decisions; §11, §12) |
 | 23 Oct 2026 | v2.34: M5 browser tests (m5-e2e). Playwright 1.64.0, ten tests across five specs on desktop and phone, in CI on every push with traces kept on failure (§8.4, §8.5). Fixed what they found: Esc from the selection bar, and the Collapse duplicates label's height on phones |
 | 23 Oct 2026 | v2.35: M5 accessibility and Lighthouse (m5-a11y). axe on every screen in light and dark with no violations, and a keyboard-only test of the main flows (§7). Field borders raised to 3:1, the list before the filters in the page, focus kept on Dismiss and Esc from the selection bar (§7). The first screen's intro is now in the static HTML, taking the phone's Lighthouse performance from 77 to 100 under real throttling (§8.2, §8.6). The last two MVP criteria are ticked: every MVP box is ticked, and the gate is next (§11) |
+| 27 Oct 2026 | v2.36: backup and sync to the user's own drive proposed (owner's request), not scheduled (§6.10). Stage 1 backs up to the user's Google Drive and restores from it. Stage 2 syncs devices: each device writes only its own files, each device rebuilds the links from the source text, deletes are recorded, and the newest change wins. Also covered: providers, encryption with a passphrase, sign-in limits, CSP hosts, decisions, draft criteria and risks. It would replace Phase 3's Supabase sync, and the gate decides whether and when (§1, §8.7, §11–§15) |
