@@ -6,3 +6,6 @@ next-env.d.ts
 
 # Fixtures are test inputs; their exact bytes matter.
 tests/fixtures/
+
+# A copy of a published page, kept as published so the two match.
+docs/*.html
