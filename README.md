@@ -93,6 +93,8 @@ file or paste
 
 Extraction is pure TypeScript with no DOM or React (enforced by lint). It runs in a Web Worker in the app, and in Node for tests.
 
+For a longer walk-through with diagrams, see [How LinkVault Works](https://claude.ai/artifact/QXPVY8cNG8q1zGiHZX71MC), or its copy in [`docs/how-linkvault-works.html`](docs/how-linkvault-works.html), which opens in any browser. It covers the worker, how links are found, the lean rows, search and the virtual list, with measured timings.
+
 ## Roadmap
 
 | Milestone | What it delivers | Status |
@@ -185,6 +187,7 @@ Tests use [Vitest](https://vitest.dev), in two projects: `unit` (Node, for the e
 ## Documentation
 
 - [`docs/PRD.md`](docs/PRD.md): what LinkVault is and will be. It covers scope, data model, the rules for every URL edge case, decisions, milestones and risks.
+- [How LinkVault Works](https://claude.ai/artifact/QXPVY8cNG8q1zGiHZX71MC): the architecture explained with diagrams, from a chat export to the list on screen. It's a private page on claude.ai, so it opens for the owner and for anyone it has been shared with. A copy is in [`docs/how-linkvault-works.html`](docs/how-linkvault-works.html), and it opens in any browser.
 - [`AGENTS.md`](AGENTS.md): notes for coding agents working in this repo (this Next.js version differs from older ones).
 
 No license has been chosen yet.
